@@ -31,3 +31,11 @@ async def get_job(job_id: str) -> JobProgress:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@router.get("/{job_id}/logs", response_model=list[str])
+async def get_job_logs(job_id: str) -> list[str]:
+    """Return the timestamped in-memory log for a job (all entries since creation)."""
+    if job_manager.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job_manager.get_logs(job_id)

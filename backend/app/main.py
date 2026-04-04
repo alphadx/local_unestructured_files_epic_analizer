@@ -8,7 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routers import jobs, reports, reorganize
 
-logging.basicConfig(level=settings.log_level)
+logging.basicConfig(
+    level=settings.log_level,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 app = FastAPI(
     title="Analizador de Archivos No Estructurados",

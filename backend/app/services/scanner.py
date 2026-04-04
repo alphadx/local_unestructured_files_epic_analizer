@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import stat
 from datetime import datetime
@@ -15,6 +16,8 @@ except ImportError:  # pragma: no cover
     _MAGIC_AVAILABLE = False
 
 from app.models.schemas import FileIndex
+
+logger = logging.getLogger(__name__)
 
 # Patterns that should be ignored (system noise, temp files, executables …)
 _IGNORED_EXTENSIONS = {
@@ -73,26 +76,53 @@ def scan_directory(root: str | Path) -> list[FileIndex]:
     pointing at the first path encountered.
     """
     root = Path(root)
+    logger.info("scan_directory: starting scan of '%s'", root)
+
     if not root.exists():
+        logger.error("scan_directory: path does not exist: '%s'", root)
         raise FileNotFoundError(f"Path does not exist: {root}")
     if not root.is_dir():
+        logger.error("scan_directory: path is not a directory: '%s'", root)
         raise NotADirectoryError(f"Path is not a directory: {root}")
 
     seen_hashes: dict[str, str] = {}  # sha256 -> first path
     results: list[FileIndex] = []
+    skipped_noise = 0
+    skipped_perm = 0
+    skipped_non_regular = 0
+    dirs_visited = 0
 
     for dirpath, _dirs, filenames in os.walk(root):
         # Skip hidden directories
+        hidden = [d for d in _dirs if d.startswith(".")]
         _dirs[:] = [d for d in _dirs if not d.startswith(".")]
+        dirs_visited += 1
+
+        if hidden:
+            logger.debug(
+                "scan_directory: skipping %d hidden sub-dir(s) in '%s': %s",
+                len(hidden), dirpath, hidden,
+            )
+        logger.debug(
+            "scan_directory: entering '%s' (%d file(s), %d sub-dir(s))",
+            dirpath, len(filenames), len(_dirs),
+        )
+
         for filename in filenames:
             file_path = Path(dirpath) / filename
             if _is_noise(file_path):
+                logger.debug("scan_directory: noise skip '%s'", file_path)
+                skipped_noise += 1
                 continue
             try:
                 st = file_path.stat()
-            except (OSError, PermissionError):
+            except (OSError, PermissionError) as exc:
+                logger.warning("scan_directory: cannot stat '%s': %s", file_path, exc)
+                skipped_perm += 1
                 continue
             if not stat.S_ISREG(st.st_mode):
+                logger.debug("scan_directory: non-regular file skip '%s'", file_path)
+                skipped_non_regular += 1
                 continue
 
             sha = _sha256(file_path)
@@ -100,6 +130,12 @@ def scan_directory(root: str | Path) -> list[FileIndex]:
             dup_of = seen_hashes[sha] if is_dup else None
             if not is_dup and sha:
                 seen_hashes[sha] = str(file_path)
+
+            if is_dup:
+                logger.debug(
+                    "scan_directory: duplicate '%s' (same hash as '%s')",
+                    file_path, dup_of,
+                )
 
             results.append(
                 FileIndex(
@@ -116,4 +152,15 @@ def scan_directory(root: str | Path) -> list[FileIndex]:
                 )
             )
 
+    logger.info(
+        "scan_directory: finished '%s' — dirs=%d files_indexed=%d "
+        "duplicates=%d skipped_noise=%d skipped_perm=%d skipped_non_regular=%d",
+        root,
+        dirs_visited,
+        len(results),
+        sum(1 for f in results if f.is_duplicate),
+        skipped_noise,
+        skipped_perm,
+        skipped_non_regular,
+    )
     return results
