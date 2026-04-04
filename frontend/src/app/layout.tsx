@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Analizador de Archivos Inteligente",
-  description: "Gobernanza de Datos con IA · Powered by Gemini",
+  description: "Gobernanza de Datos con IA · Powered by Gemini - Por Alexander Espina Leyton",
 };
 
 export default function RootLayout({

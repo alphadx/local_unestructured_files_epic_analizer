@@ -232,7 +232,7 @@ export default function Home() {
             🧠 Analizador de Archivos Inteligente
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Gobernanza de Datos · Powered by Gemini
+            Gobernanza de Datos · Powered by Gemini - Por Alexander Espina Leyton
           </p>
         </div>
       </header>

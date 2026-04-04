@@ -21,7 +21,8 @@
 7. [Variables de entorno](#variables-de-entorno)
 8. [Referencia de API](#referencia-de-api)
 9. [Testing](#testing)
-10. [Hoja de ruta](#hoja-de-ruta)
+10. [Análisis por grupos de directorio (próxima tarea)](#análisis-por-grupos-de-directorio-próxima-tarea)
+11. [Hoja de ruta](#hoja-de-ruta)
 
 ---
 
@@ -357,6 +358,81 @@ Los tests cubren:
 - `test_api.py`: health check, endpoints de jobs y reports (sin APIs externas)
 - `test_clustering.py`: agrupación por etiqueta, HDBSCAN fallback, detección de inconsistencias
 - `test_scanner.py`: noise filter, SHA-256, detección de duplicados, escaneo recursivo, casos límite
+
+---
+
+## Análisis por grupos de directorio (próxima tarea)
+
+La siguiente iteración incorporará análisis de contexto de carpeta para que un archivo no se evalúe sólo por su contenido individual, sino también por el patrón del directorio donde vive.
+
+### 1) Prerrequisito: indexación completa del árbol
+
+Para tratar carpetas como grupos, primero debemos tener el inventario indexado:
+- Nodos de archivo con: ruta, hash, categoría, entidades, embedding y señales de riesgo (PII, ruido, duplicados)
+- Nodos de directorio con: ruta normalizada, profundidad y relación padre/hijo
+- Relación archivo → directorio y agregados por carpeta (conteos, diversidad, distribución temporal)
+
+Sin esta capa de indexación no es posible construir una representación consistente de grupo.
+
+### 2) ¿Cómo tratar un grupo?
+
+Un **grupo** será una unidad derivada de estructura de árbol, con dos modos:
+- **Modo estricto**: un grupo = un directorio (sin subdirectorios)
+- **Modo extendido**: un grupo = un directorio + subárbol (incluye descendientes)
+
+Cada grupo tendrá un `group_profile` con features agregadas:
+- Distribución de categorías documentales (ej.: facturas, contratos, licitaciones)
+- Distribución de extensiones y MIME
+- Huella semántica: centroide de embeddings y dispersión interna
+- Señales operativas: ratio de duplicados, ratio de PII, archivos sin clasificar
+- Señales temporales: concentración por período fiscal/fecha de emisión
+
+### 3) ¿Cómo analizar un grupo?
+
+El análisis combinará estadística + semántica:
+- **Coherencia interna**: qué tan homogéneo es el grupo respecto a su tema dominante
+- **Anomalías internas**: archivos que se alejan del centroide semántico del grupo
+- **Calidad documental**: faltantes de metadatos clave, inconsistencias de relaciones, riesgo PII
+- **Patrón de composición**: si el grupo se parece a una "carpeta operativa típica" o a una carpeta mixta/ruidosa
+
+Salida esperada por grupo:
+- `summary`: propósito inferido de la carpeta
+- `health_score`: puntaje compuesto (0-100)
+- `alerts`: inconsistencias o riesgo
+- `representative_docs`: ejemplos más centrales del grupo
+
+### 4) ¿Cómo decidir que un grupo se parece a otro?
+
+Usaremos una similitud híbrida entre perfiles de grupo:
+
+$$
+S(G_i, G_j) = w_1\,\cos(c_i, c_j) + w_2\,J(C_i, C_j) + w_3\,(1 - \Delta_{pii}) + w_4\,(1 - \Delta_{dup})
+$$
+
+Donde:
+- $\cos(c_i, c_j)$: similitud coseno entre centroides semánticos
+- $J(C_i, C_j)$: similitud tipo Jaccard/overlap sobre categorías y entidades dominantes
+- $\Delta_{pii}$ y $\Delta_{dup}$: diferencia normalizada de tasas de PII y duplicados
+- $w_k$: pesos calibrables según objetivo (compliance, operación, orden documental)
+
+Con esta métrica podremos:
+- Detectar carpetas equivalentes (misma función documental en distintas áreas)
+- Detectar carpetas atípicas (outliers estructurales)
+- Sugerir consolidación o normalización de estructura
+
+### 5) Plan del siguiente turno (implementación)
+
+1. Extender modelos (`schemas`) con entidades de grupo: `GroupProfile`, `GroupSimilarity`, `GroupAnalysisResult`.
+2. Crear servicio `grouping_service` para construir grupos en modo estricto/extendido desde archivos indexados.
+3. Implementar extracción de features agregadas y centroides por grupo.
+4. Implementar motor de similitud híbrida y ranking top-k de grupos similares.
+5. Exponer endpoints iniciales:
+  - `GET /api/reports/{job_id}/groups`
+  - `GET /api/reports/{job_id}/groups/similarity`
+6. Añadir tests unitarios para construcción de grupos, features y métrica de similitud.
+7. Integrar vista frontend mínima (tabla de grupos + "se parece a").
+
+> Criterio de aceptación propuesto: dado un corpus con carpetas temáticas conocidas, el sistema debe recuperar como similares al menos los grupos equivalentes esperados en el top-3.
 
 ---
 
