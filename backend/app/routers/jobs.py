@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+import asyncio
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect, status
 
 from app.models.schemas import JobProgress, ScanRequest
 from app.services import job_manager
@@ -39,3 +41,26 @@ async def get_job_logs(job_id: str) -> list[str]:
     if job_manager.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job_manager.get_logs(job_id)
+
+
+@router.websocket("/{job_id}/logs/ws")
+async def job_log_websocket(job_id: str, websocket: WebSocket) -> None:
+    if job_manager.get_job(job_id) is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    await websocket.accept()
+    queue: asyncio.Queue[str] = asyncio.Queue()
+    job_manager.subscribe_job_logs(job_id, queue)
+
+    try:
+        for line in job_manager.get_logs(job_id):
+            await websocket.send_text(line)
+
+        while True:
+            entry = await queue.get()
+            await websocket.send_text(entry)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        job_manager.unsubscribe_job_logs(job_id, queue)

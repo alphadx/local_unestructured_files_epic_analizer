@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { JobProgress } from "@/lib/api";
-import { getJobLogs } from "@/lib/api";
+import { getApiBase, getJobLogs } from "@/lib/api";
 
 interface Props {
   job: JobProgress;
@@ -31,11 +31,9 @@ export default function JobStatusCard({ job }: Props) {
   const [logs, setLogs] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    if (job.status !== "running" && job.status !== "completed") return;
-
     const fetchLogs = async () => {
       try {
         const entries = await getJobLogs(job.job_id);
@@ -45,16 +43,33 @@ export default function JobStatusCard({ job }: Props) {
       }
     };
 
-    fetchLogs();
+    const connectWebSocket = () => {
+      const base = getApiBase();
+      const url = new URL(base);
+      url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+      url.pathname = `/api/jobs/${job.job_id}/logs/ws`;
+      const socket = new WebSocket(url.toString());
+      wsRef.current = socket;
+
+      socket.addEventListener("message", (event) => {
+        setLogs((prev) => [...prev, event.data]);
+      });
+
+      socket.addEventListener("close", () => {
+        wsRef.current = null;
+      });
+    };
 
     if (job.status === "running") {
-      pollRef.current = setInterval(fetchLogs, 2_000);
+      connectWebSocket();
+    } else if (job.status === "completed" || job.status === "failed") {
+      fetchLogs();
     }
 
     return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
     };
   }, [job.job_id, job.status]);

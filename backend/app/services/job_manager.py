@@ -41,6 +41,8 @@ _documents: dict[str, list[DocumentMetadata]] = {}
 _chunks: dict[str, list[DocumentChunk]] = {}
 # job_id -> list of timestamped log lines
 _job_logs: dict[str, list[str]] = {}
+# job_id -> active websocket subscriber queues for live logs
+_log_subscribers: dict[str, list[asyncio.Queue[str]]] = defaultdict(list)
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +77,22 @@ def get_logs(job_id: str) -> list[str]:
     return _job_logs.get(job_id, [])
 
 
+def subscribe_job_logs(job_id: str, queue: asyncio.Queue[str]) -> None:
+    _log_subscribers[job_id].append(queue)
+
+
+def unsubscribe_job_logs(job_id: str, queue: asyncio.Queue[str]) -> None:
+    queues = _log_subscribers.get(job_id)
+    if not queues:
+        return
+    try:
+        queues.remove(queue)
+    except ValueError:
+        pass
+    if not queues:
+        _log_subscribers.pop(job_id, None)
+
+
 def list_jobs() -> list[JobProgress]:
     return list(_jobs.values())
 
@@ -84,6 +102,12 @@ def _log(job_id: str, level: str, msg: str) -> None:
     ts = time.strftime("%H:%M:%S")
     entry = f"[{ts}] [{level}] {msg}"
     _job_logs.setdefault(job_id, []).append(entry)
+    for queue in list(_log_subscribers.get(job_id, [])):
+        try:
+            queue.put_nowait(entry)
+        except asyncio.QueueFull:
+            # If the frontend isn't keeping up, drop the oldest queued message.
+            continue
     getattr(logger, level.lower(), logger.info)(msg)
 
 
