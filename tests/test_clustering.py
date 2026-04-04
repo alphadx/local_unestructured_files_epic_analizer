@@ -6,6 +6,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 from app.models.schemas import (
@@ -87,6 +89,58 @@ class TestBuildClusters:
 
     def test_empty_docs(self):
         assert build_clusters([]) == []
+
+    def test_chunk_embeddings_use_hdbscan_if_available(self):
+        pytest.importorskip("hdbscan")
+
+        docs = [
+            _make_doc("a1", "/a1.pdf", DocumentCategory.INVOICE, "X"),
+            _make_doc("b1", "/b1.pdf", DocumentCategory.INVOICE, "Y"),
+        ]
+        chroma_data = [
+            {
+                "id": "chunk::c1",
+                "embedding": [1.0, 0.0, 0.0],
+                "metadata": {
+                    "document_id": "a1",
+                    "kind": "chunk",
+                    "cluster_sugerido": "X",
+                },
+            },
+            {
+                "id": "chunk::c2",
+                "embedding": [1.0, 0.0, 0.0],
+                "metadata": {
+                    "document_id": "a1",
+                    "kind": "chunk",
+                    "cluster_sugerido": "X",
+                },
+            },
+            {
+                "id": "chunk::c3",
+                "embedding": [0.0, 1.0, 0.0],
+                "metadata": {
+                    "document_id": "b1",
+                    "kind": "chunk",
+                    "cluster_sugerido": "Y",
+                },
+            },
+            {
+                "id": "chunk::c4",
+                "embedding": [0.0, 1.0, 0.0],
+                "metadata": {
+                    "document_id": "b1",
+                    "kind": "chunk",
+                    "cluster_sugerido": "Y",
+                },
+            },
+        ]
+
+        clusters = build_clusters(docs, chroma_data=chroma_data)
+        assert len(clusters) == 2
+        labels = {cluster.label for cluster in clusters}
+        assert labels == {"X", "Y"}
+        assert all(cluster.document_count == 1 for cluster in clusters)
 
 
 class TestDetectInconsistencies:

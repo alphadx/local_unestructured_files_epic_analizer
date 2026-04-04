@@ -250,8 +250,12 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
             chroma_data: list[dict] = []
             if request.enable_embeddings:
                 chroma_data = await loop.run_in_executor(
-                    None, vector_store.get_all_embeddings, "document"
+                    None, vector_store.get_all_embeddings, "chunk"
                 )
+                if not chroma_data:
+                    chroma_data = await loop.run_in_executor(
+                        None, vector_store.get_all_embeddings, "document"
+                    )
                 _log(job_id, "DEBUG", f"  → {len(chroma_data)} embeddings recuperados de ChromaDB")
 
             clusters = await loop.run_in_executor(
