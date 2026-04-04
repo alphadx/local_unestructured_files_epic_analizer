@@ -47,6 +47,19 @@ export interface ClusterItem {
   resumen?: string;
 }
 
+export interface DocumentChunk {
+  chunk_id: string;
+  documento_id: string;
+  artifact_kind: "fragmento";
+  source_path: string;
+  chunk_index: number;
+  text: string;
+  title?: string | null;
+  section_path: string[];
+  page_number?: number | null;
+  token_count?: number | null;
+}
+
 export interface Cluster {
   cluster_id: string;
   label: string;
@@ -78,6 +91,136 @@ export interface DataHealthReport {
   }>;
 }
 
+export interface ClusterSummary {
+  cluster_id: string;
+  label: string;
+  document_count: number;
+  inconsistency_count: number;
+}
+
+export interface JobStatistics {
+  job_id: string;
+  total_files: number;
+  unique_files: number;
+  duplicate_files: number;
+  extension_breakdown: Record<string, number>;
+  category_distribution: Record<string, number>;
+  mime_breakdown: Record<string, number>;
+  size_bucket_distribution: Record<string, number>;
+  directory_breakdown: Record<string, number>;
+  pii_risk_distribution: Record<string, number>;
+  keyword_distribution: Record<string, number>;
+  semantic_coverage: number;
+  cluster_summary: ClusterSummary[];
+}
+
+export interface CorpusFacetItem {
+  label: string;
+  count: number;
+  share: number;
+}
+
+export interface DirectoryHotspot {
+  path: string;
+  count: number;
+  duplicate_count: number;
+  unknown_count: number;
+  share: number;
+}
+
+export interface TopicSummary {
+  label: string;
+  document_count: number;
+  inconsistency_count: number;
+  share: number;
+}
+
+export interface CorpusExplorationReport {
+  job_id: string;
+  total_files: number;
+  unique_files: number;
+  duplicate_files: number;
+  top_extensions: CorpusFacetItem[];
+  top_directories: CorpusFacetItem[];
+  dominant_categories: CorpusFacetItem[];
+  dominant_clusters: TopicSummary[];
+  noisy_directories: DirectoryHotspot[];
+  uncategorised_share: number;
+  pii_share: number;
+  concentration_index: number;
+}
+
+export type SearchScope = "all" | "documents" | "chunks" | "hybrid";
+
+export interface SearchRequest {
+  query?: string | null;
+  job_id?: string | null;
+  category?: string[];
+  extension?: string[];
+  directory?: string[];
+  scope?: SearchScope;
+  top_k?: number;
+}
+
+export interface SearchResult {
+  source_id: string;
+  kind: string;
+  title?: string | null;
+  path: string;
+  document_id: string;
+  category: string;
+  cluster_sugerido?: string | null;
+  snippet: string;
+  score: number;
+  distance: number;
+}
+
+export interface SearchFacet {
+  label: string;
+  count: number;
+  share: number;
+}
+
+export interface SearchResponse {
+  query?: string | null;
+  job_id?: string | null;
+  total_results: number;
+  results: SearchResult[];
+  categories: SearchFacet[];
+  extensions: SearchFacet[];
+  directories: SearchFacet[];
+  suggestions: string[];
+}
+
+export interface RagQueryRequest {
+  query: string;
+  job_id?: string | null;
+  top_k?: number;
+  include_answer?: boolean;
+}
+
+export interface RagSource {
+  source_id: string;
+  kind: string;
+  document_id?: string | null;
+  path?: string | null;
+  title?: string | null;
+  category?: string | null;
+  cluster_sugerido?: string | null;
+  chunk_index?: number | null;
+  page_number?: number | null;
+  snippet: string;
+  distance: number;
+  score: number;
+}
+
+export interface RagQueryResponse {
+  query: string;
+  answer?: string | null;
+  context: string;
+  sources: RagSource[];
+}
+
 // ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
@@ -102,8 +245,33 @@ export async function getReport(jobId: string): Promise<DataHealthReport> {
   return data;
 }
 
+export async function getChunks(jobId: string): Promise<DocumentChunk[]> {
+  const { data } = await api.get<DocumentChunk[]>(`/api/reports/${jobId}/chunks`);
+  return data;
+}
+
+export async function getStatistics(jobId: string): Promise<JobStatistics> {
+  const { data } = await api.get<JobStatistics>(`/api/reports/${jobId}/statistics`);
+  return data;
+}
+
+export async function getExploration(jobId: string): Promise<CorpusExplorationReport> {
+  const { data } = await api.get<CorpusExplorationReport>(`/api/reports/${jobId}/exploration`);
+  return data;
+}
+
 export async function getJobLogs(jobId: string): Promise<string[]> {
   const { data } = await api.get<string[]>(`/api/jobs/${jobId}/logs`);
+  return data;
+}
+
+export async function searchCorpus(request: SearchRequest): Promise<SearchResponse> {
+  const { data } = await api.post<SearchResponse>("/api/search", request);
+  return data;
+}
+
+export async function queryRag(request: RagQueryRequest): Promise<RagQueryResponse> {
+  const { data } = await api.post<RagQueryResponse>("/api/rag/query", request);
   return data;
 }
 

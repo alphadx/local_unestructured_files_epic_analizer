@@ -13,12 +13,14 @@ import logging
 import time
 import uuid
 from collections import defaultdict
+from functools import partial
 from typing import Any
 
 from app.models.schemas import (
     DataHealthReport,
     DocumentCategory,
     DocumentMetadata,
+    DocumentChunk,
     DuplicateGroup,
     JobProgress,
     JobStatus,
@@ -35,6 +37,8 @@ _jobs: dict[str, JobProgress] = {}
 _reports: dict[str, DataHealthReport] = {}
 # job_id -> list[DocumentMetadata]
 _documents: dict[str, list[DocumentMetadata]] = {}
+# job_id -> list[DocumentChunk]
+_chunks: dict[str, list[DocumentChunk]] = {}
 # job_id -> list of timestamped log lines
 _job_logs: dict[str, list[str]] = {}
 
@@ -61,6 +65,10 @@ def get_report(job_id: str) -> DataHealthReport | None:
 
 def get_documents(job_id: str) -> list[DocumentMetadata]:
     return _documents.get(job_id, [])
+
+
+def get_chunks(job_id: str) -> list[DocumentChunk]:
+    return _chunks.get(job_id, [])
 
 
 def get_logs(job_id: str) -> list[str]:
@@ -125,43 +133,85 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
 
         # --- Step 2: Gemini classification ---
         from app.services import gemini_service
+        from app.services.document_extraction_service import (
+            build_classification_context,
+            extract_document_content,
+        )
 
         _log(job_id, "INFO", f"[Paso 2/5] Clasificando {len(unique_files)} archivo(s) con Gemini…")
         documents: list[DocumentMetadata] = []
+        chunks: list[DocumentChunk] = []
 
         for idx, fi in enumerate(unique_files):
             job.processed_files = idx + 1
             job.message = f"Clasificando ({idx + 1}/{len(unique_files)}): {fi.name}"
             _log(job_id, "DEBUG", f"Clasificando [{idx + 1}/{len(unique_files)}]: {fi.path}")
 
-            doc = await loop.run_in_executor(None, gemini_service.classify_document, fi)
+            extraction = await loop.run_in_executor(None, extract_document_content, fi)
+            _log(
+                job_id,
+                "DEBUG",
+                f"  → extracción={extraction.extraction_method}, partes={len(extraction.chunks)}",
+            )
+
+            classification_context = build_classification_context(extraction)
+            if classification_context:
+                _log(
+                    job_id,
+                    "DEBUG",
+                    f"  → contexto LLM={len(classification_context)} caracteres",
+                )
+
+            doc = await loop.run_in_executor(
+                None,
+                gemini_service.classify_document,
+                fi,
+                classification_context or extraction.text,
+            )
             _log(job_id, "DEBUG",
                  f"  → categoría={doc.categoria}, pii={doc.pii_info.detected}")
+            chunks.extend(extraction.chunks)
 
             # --- Step 3: Embeddings ---
             if request.enable_embeddings:
                 from app.services import embeddings_service
                 from app.db import vector_store
 
-                embed_text = " ".join(
-                    filter(
-                        None,
-                        [
-                            doc.analisis_semantico.resumen,
-                            " ".join(doc.analisis_semantico.palabras_clave),
-                        ],
-                    )
-                )
+                embed_text = _build_embedding_text(doc, extraction.text)
                 if embed_text:
                     embedding = await loop.run_in_executor(
                         None, embeddings_service.embed_text, embed_text
                     )
                     doc.embedding = embedding
-                    await loop.run_in_executor(None, vector_store.upsert_document, doc)
+                    await loop.run_in_executor(
+                        None,
+                        partial(vector_store.upsert_document, doc, job_id=job_id),
+                    )
+
+                    for chunk in extraction.chunks:
+                        chunk_text = _build_chunk_embedding_text(chunk.text)
+                        if not chunk_text:
+                            continue
+                        chunk.embedding = await loop.run_in_executor(
+                            None, embeddings_service.embed_text, chunk_text
+                        )
+                        await loop.run_in_executor(
+                            None,
+                            partial(
+                                vector_store.upsert_chunk,
+                                chunk,
+                                job_id=job_id,
+                                category=doc.categoria.value,
+                                cluster_sugerido=doc.analisis_semantico.cluster_sugerido or "",
+                                risk_level=doc.pii_info.risk_level.value,
+                                confidence=doc.analisis_semantico.confianza_clasificacion or 0.0,
+                            ),
+                        )
 
             documents.append(doc)
 
         _documents[job_id] = documents
+        _chunks[job_id] = chunks
         _log(job_id, "INFO",
              f"[Paso 2/5] Clasificación completada — {len(documents)} documento(s) procesados")
 
@@ -175,7 +225,9 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
 
             chroma_data: list[dict] = []
             if request.enable_embeddings:
-                chroma_data = await loop.run_in_executor(None, vector_store.get_all_embeddings)
+                chroma_data = await loop.run_in_executor(
+                    None, vector_store.get_all_embeddings, "document"
+                )
                 _log(job_id, "DEBUG", f"  → {len(chroma_data)} embeddings recuperados de ChromaDB")
 
             clusters = await loop.run_in_executor(
@@ -258,3 +310,19 @@ def _build_report(
         clusters=clusters,
         reorganisation_plan=reorg_plan,
     )
+
+
+def _build_embedding_text(doc: DocumentMetadata, extracted_text: str | None) -> str:
+    parts = [
+        doc.analisis_semantico.resumen,
+        " ".join(doc.analisis_semantico.palabras_clave),
+        extracted_text[:4_000] if extracted_text else None,
+    ]
+    return " ".join(part for part in parts if part).strip()
+
+
+def _build_chunk_embedding_text(text: str) -> str:
+    cleaned = text.strip()
+    if not cleaned:
+        return ""
+    return cleaned[:4_000]

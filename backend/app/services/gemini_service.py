@@ -10,7 +10,10 @@ of the pipeline can still function.
 
 import json
 import logging
+import re
 from pathlib import Path
+
+from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
 from app.models.schemas import (
@@ -66,8 +69,138 @@ Analiza el siguiente documento y devuelve ÚNICAMENTE un objeto JSON válido con
   "fecha_emision": "<YYYY-MM-DD o null>",
   "periodo_fiscal": "<YYYY-MM o null>"
 }
-No incluyas ningún texto fuera del JSON.
+Reglas:
+- Usa categorías conocidas; si no puedes inferir una válida, devuelve "Desconocido".
+- `confianza_clasificacion` debe estar entre 0 y 1.
+- `palabras_clave` debe contener como máximo 5 elementos únicos y no vacíos.
+- `fecha_emision` debe usar formato YYYY-MM-DD o null.
+- `periodo_fiscal` debe usar formato YYYY-MM o null.
+- No incluyas ningún texto fuera del JSON.
 """
+
+_RAG_PROMPT = """
+Eres un asistente experto en análisis documental.
+Responde usando únicamente el contexto proporcionado.
+Si el contexto no contiene la respuesta, dilo explícitamente.
+Mantén la respuesta breve, precisa y útil para auditoría.
+"""
+
+
+class _ClassificationEntities(BaseModel):
+    emisor: str | None = None
+    receptor: str | None = None
+    monto_total: float | None = None
+    moneda: str | None = None
+
+    @field_validator("moneda", mode="before")
+    @classmethod
+    def _normalize_currency(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip().upper()
+        return text or None
+
+
+class _ClassificationRelations(BaseModel):
+    id_licitacion_vinculada: str | None = None
+    id_ot_referencia: str | None = None
+
+
+class _ClassificationSemantic(BaseModel):
+    resumen: str | None = None
+    cluster_sugerido: str | None = None
+    confianza_clasificacion: float = Field(default=0.0, ge=0.0, le=1.0)
+    palabras_clave: list[str] = Field(default_factory=list)
+
+    @field_validator("confianza_clasificacion", mode="before")
+    @classmethod
+    def _normalize_confidence(cls, value: object) -> float:
+        if value is None:
+            return 0.0
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        return max(0.0, min(1.0, numeric))
+
+    @field_validator("palabras_clave", mode="before")
+    @classmethod
+    def _normalize_keywords(cls, value: object) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        keywords: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            if item is None:
+                continue
+            keyword = re.sub(r"\s+", " ", str(item)).strip()
+            if not keyword:
+                continue
+            key = keyword.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            keywords.append(keyword)
+            if len(keywords) == 5:
+                break
+        return keywords
+
+
+class _ClassificationPii(BaseModel):
+    detected: bool = False
+    risk_level: RiskLevel = RiskLevel.GREEN
+    details: list[str] = Field(default_factory=list)
+
+    @field_validator("risk_level", mode="before")
+    @classmethod
+    def _normalize_risk_level(cls, value: object) -> str | RiskLevel:
+        if value is None:
+            return RiskLevel.GREEN
+        text = str(value).strip().lower()
+        if text in {RiskLevel.GREEN.value, RiskLevel.YELLOW.value, RiskLevel.RED.value}:
+            return text
+        return RiskLevel.GREEN
+
+    @field_validator("details", mode="before")
+    @classmethod
+    def _normalize_details(cls, value: object) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        return [str(item).strip() for item in value if str(item).strip()]
+
+
+class _ClassificationPayload(BaseModel):
+    categoria: str = DocumentCategory.UNKNOWN.value
+    entidades: _ClassificationEntities = Field(default_factory=_ClassificationEntities)
+    relaciones: _ClassificationRelations = Field(default_factory=_ClassificationRelations)
+    analisis_semantico: _ClassificationSemantic = Field(default_factory=_ClassificationSemantic)
+    pii_info: _ClassificationPii = Field(default_factory=_ClassificationPii)
+    fecha_emision: str | None = None
+    periodo_fiscal: str | None = None
+
+    @field_validator("categoria", mode="before")
+    @classmethod
+    def _normalize_category(cls, value: object) -> str:
+        if value is None:
+            return DocumentCategory.UNKNOWN.value
+        text = str(value).strip()
+        return text or DocumentCategory.UNKNOWN.value
+
+    @field_validator("fecha_emision", mode="before")
+    @classmethod
+    def _normalize_date(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text) else None
+
+    @field_validator("periodo_fiscal", mode="before")
+    @classmethod
+    def _normalize_period(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text if re.fullmatch(r"\d{4}-\d{2}", text) else None
 
 
 def _get_client():
@@ -91,6 +224,42 @@ def _stub_metadata(file_index: FileIndex) -> DocumentMetadata:
     )
 
 
+def _payload_to_metadata(payload: _ClassificationPayload, file_index: FileIndex) -> DocumentMetadata:
+    try:
+        categoria = DocumentCategory(payload.categoria)
+    except ValueError:
+        categoria = DocumentCategory.UNKNOWN
+
+    return DocumentMetadata(
+        documento_id=file_index.sha256 or file_index.path,
+        file_index=file_index,
+        categoria=categoria,
+        entidades=DocumentEntities(
+            emisor=payload.entidades.emisor,
+            receptor=payload.entidades.receptor,
+            monto_total=payload.entidades.monto_total,
+            moneda=payload.entidades.moneda,
+        ),
+        relaciones=DocumentRelations(
+            id_licitacion_vinculada=payload.relaciones.id_licitacion_vinculada,
+            id_ot_referencia=payload.relaciones.id_ot_referencia,
+        ),
+        analisis_semantico=SemanticAnalysis(
+            resumen=payload.analisis_semantico.resumen,
+            cluster_sugerido=payload.analisis_semantico.cluster_sugerido,
+            confianza_clasificacion=payload.analisis_semantico.confianza_clasificacion,
+            palabras_clave=payload.analisis_semantico.palabras_clave,
+        ),
+        pii_info=PiiInfo(
+            detected=payload.pii_info.detected,
+            risk_level=payload.pii_info.risk_level,
+            details=payload.pii_info.details,
+        ),
+        fecha_emision=payload.fecha_emision,
+        periodo_fiscal=payload.periodo_fiscal,
+    )
+
+
 def _parse_response(raw: str, file_index: FileIndex) -> DocumentMetadata:
     """Parse the JSON returned by Gemini into a DocumentMetadata object."""
     text = raw.strip()
@@ -105,51 +274,30 @@ def _parse_response(raw: str, file_index: FileIndex) -> DocumentMetadata:
     except json.JSONDecodeError as exc:
         logger.warning("Failed to parse Gemini JSON response: %s", exc)
         return _stub_metadata(file_index)
-
-    pii_raw = data.get("pii_info", {})
-    sem_raw = data.get("analisis_semantico", {})
-
     try:
-        categoria = DocumentCategory(data.get("categoria", DocumentCategory.UNKNOWN))
-    except ValueError:
-        categoria = DocumentCategory.UNKNOWN
+        payload = _ClassificationPayload.model_validate(data)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to validate Gemini JSON response: %s", exc)
+        return _stub_metadata(file_index)
 
-    try:
-        risk_level = RiskLevel(pii_raw.get("risk_level", RiskLevel.GREEN))
-    except ValueError:
-        risk_level = RiskLevel.GREEN
+    return _payload_to_metadata(payload, file_index)
 
-    return DocumentMetadata(
-        documento_id=file_index.sha256 or file_index.path,
-        file_index=file_index,
-        categoria=categoria,
-        entidades=DocumentEntities(
-            emisor=data.get("entidades", {}).get("emisor"),
-            receptor=data.get("entidades", {}).get("receptor"),
-            monto_total=data.get("entidades", {}).get("monto_total"),
-            moneda=data.get("entidades", {}).get("moneda"),
-        ),
-        relaciones=DocumentRelations(
-            id_licitacion_vinculada=data.get("relaciones", {}).get("id_licitacion_vinculada"),
-            id_ot_referencia=data.get("relaciones", {}).get("id_ot_referencia"),
-        ),
-        analisis_semantico=SemanticAnalysis(
-            resumen=sem_raw.get("resumen"),
-            cluster_sugerido=sem_raw.get("cluster_sugerido"),
-            confianza_clasificacion=sem_raw.get("confianza_clasificacion"),
-            palabras_clave=sem_raw.get("palabras_clave", []),
-        ),
-        pii_info=PiiInfo(
-            detected=pii_raw.get("detected", False),
-            risk_level=risk_level,
-            details=pii_raw.get("details", []),
-        ),
-        fecha_emision=data.get("fecha_emision"),
-        periodo_fiscal=data.get("periodo_fiscal"),
+
+def _classify_with_text(file_index: FileIndex, text_content: str) -> DocumentMetadata:
+    client = _get_client()
+    prompt = (
+        _CLASSIFICATION_PROMPT
+        + "\n\nTexto extraído del documento:\n"
+        + text_content[:12_000]
     )
+    response = client.models.generate_content(
+        model=settings.gemini_flash_model,
+        contents=prompt,
+    )
+    return _parse_response(response.text, file_index)
 
 
-def classify_document(file_index: FileIndex) -> DocumentMetadata:
+def classify_document(file_index: FileIndex, extracted_text: str | None = None) -> DocumentMetadata:
     """
     Send a file to Gemini Flash for classification and metadata extraction.
 
@@ -159,7 +307,9 @@ def classify_document(file_index: FileIndex) -> DocumentMetadata:
         logger.debug("Gemini API key not set – returning stub for %s", file_index.path)
         return _stub_metadata(file_index)
 
-    from google import genai  # type: ignore
+    if extracted_text and extracted_text.strip():
+        return _classify_with_text(file_index, extracted_text)
+
     from google.genai import types  # type: ignore
 
     client = _get_client()
@@ -217,3 +367,21 @@ def classify_document(file_index: FileIndex) -> DocumentMetadata:
     except Exception as exc:  # noqa: BLE001
         logger.error("Gemini classification failed for %s: %s", file_index.path, exc)
         return _stub_metadata(file_index)
+
+
+def generate_rag_answer(question: str, context: str) -> str | None:
+    """Generate a grounded answer for a RAG query."""
+    if not settings.gemini_api_key:
+        return None
+
+    try:
+        client = _get_client()
+        response = client.models.generate_content(
+            model=settings.gemini_flash_model,
+            contents=f"{_RAG_PROMPT}\n\nPregunta:\n{question}\n\nContexto:\n{context}",
+        )
+        text = (response.text or "").strip()
+        return text or None
+    except Exception as exc:  # noqa: BLE001
+        logger.error("RAG generation failed: %s", exc)
+        return None

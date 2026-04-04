@@ -2,3 +2,5 @@
 # Install only when HDBSCAN clustering is required.
 
 hdbscan==0.8.33
+# Optional document parsing / extraction pipeline for advanced ingestion.
+unstructured[all-docs]==0.16.20

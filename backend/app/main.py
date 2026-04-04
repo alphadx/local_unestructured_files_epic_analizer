@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import jobs, reports, reorganize
+from app.routers import jobs, rag, reports, reorganize, search
 
 logging.basicConfig(
     level=settings.log_level,
@@ -34,6 +34,8 @@ app.add_middleware(
 
 app.include_router(jobs.router)
 app.include_router(reports.router)
+app.include_router(rag.router)
+app.include_router(search.router)
 app.include_router(reorganize.router)
 
 

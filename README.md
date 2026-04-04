@@ -146,8 +146,9 @@ Cada archivo único es enviado a Gemini y se extrae:
 
 ### Vectorización y búsqueda semántica
 - Genera embeddings de 768 dimensiones con `text-embedding-004`
-- Persiste en **ChromaDB** con métrica coseno
+- Persiste documentos y chunks en **ChromaDB** con métrica coseno
 - Permite búsqueda de documentos similares (`query_similar`)
+- Soporta un ChromaDB remoto o cloud mediante `CHROMA_HOST`, `CHROMA_PORT`, `VECTOR_STORE_SSL` y `VECTOR_STORE_HEADERS`
 - Degradación graciosa si ChromaDB no está disponible
 
 ### Clustering
@@ -167,6 +168,7 @@ Cada archivo único es enviado a Gemini y se extrae:
 - Polling automático del estado del job (cada 2 segundos)
 - Mapa de burbujas D3.js de los clusters semánticos
 - Vista de auditoría por cluster con inconsistencias
+- Panel de estadísticas, exploración de corpus, búsqueda híbrida y asistente RAG
 - Botón de ejecución de reorganización (con confirmación implícita)
 - Visor de logs en tiempo real del pipeline
 
@@ -195,6 +197,8 @@ cd local_unestructured_files_epic_analizer
 # 2. Crear el archivo de variables de entorno
 cp .env.example .env
 # Editar .env: añadir GEMINI_API_KEY y ajustar SCAN_PATH
+# Si usas un vector store cloud, configura CHROMA_HOST, CHROMA_PORT,
+# VECTOR_STORE_SSL y VECTOR_STORE_HEADERS para apuntar al servicio remoto.
 
 # 3. Levantar los tres servicios
 docker compose up --build
@@ -267,6 +271,10 @@ docker run -p 8001:8000 chromadb/chroma:0.5.0
 | `CHROMA_HOST` | `chromadb` | Host de ChromaDB |
 | `CHROMA_PORT` | `8000` | Puerto de ChromaDB |
 | `CHROMA_COLLECTION` | `documents` | Nombre de la colección |
+| `VECTOR_STORE_PROVIDER` | `chroma` | Proveedor del vector store (`chroma` por ahora) |
+| `VECTOR_STORE_SSL` | `false` | Habilita TLS al conectarse al vector store remoto |
+| `VECTOR_STORE_HEADERS` | `{}` | Headers adicionales para autenticación remota; acepta JSON o pares `key=value` y puede dejarse vacío |
+| `VECTOR_STORE_ALLOW_RESET` | `true` | Permite reiniciar la colección desde el backend |
 | `MAX_FILE_SIZE_MB` | `10` | Tamaño máximo por archivo antes de truncar |
 | `SCAN_CONCURRENCY` | `4` | Hilos para el escáner |
 | `LOG_LEVEL` | `INFO` | Nivel de log (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
@@ -304,7 +312,21 @@ La documentación interactiva completa está disponible en `http://localhost:808
 |--------|------|-------------|
 | `GET` | `/api/reports/{job_id}` | Reporte completo de salud de datos |
 | `GET` | `/api/reports/{job_id}/documents` | Lista de documentos clasificados |
+| `GET` | `/api/reports/{job_id}/chunks` | Fragmentos semánticos extraídos |
 | `GET` | `/api/reports/{job_id}/statistics` | Estadísticas de distribución (extensiones, categorías, PII) |
+| `GET` | `/api/reports/{job_id}/exploration` | Exploración de corpus: carpetas, temas, ruido y concentración |
+
+### RAG
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/rag/query` | Recuperación semántica y respuesta asistida por LLM |
+
+### Search
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/search` | Búsqueda híbrida con filtros por categoría, extensión y directorio |
 
 ### Reorganize
 
@@ -366,4 +388,3 @@ Los tests cubren:
 ## Licencia
 
 MIT © alphadx
-

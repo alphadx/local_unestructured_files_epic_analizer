@@ -7,7 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+        enable_decoding=False,
+        env_ignore_empty=True,
+    )
 
     # Gemini
     gemini_api_key: str = ""
@@ -15,9 +20,13 @@ class Settings(BaseSettings):
     gemini_embedding_model: str = "models/text-embedding-004"
 
     # ChromaDB
+    vector_store_provider: str = "chroma"
     chroma_host: str = "chromadb"
     chroma_port: int = 8000
+    vector_store_ssl: bool = False
+    vector_store_headers: dict[str, str] = {}
     chroma_collection: str = "documents"
+    vector_store_allow_reset: bool = True
 
     # App
     max_file_size_mb: int = 10
@@ -52,6 +61,30 @@ class Settings(BaseSettings):
             return [item.strip() for item in raw.split(",") if item.strip()]
 
         return value
+
+    @field_validator("vector_store_headers", mode="before")
+    @classmethod
+    def _parse_vector_store_headers(cls, value: Any) -> dict[str, str]:
+        if value in (None, "", {}):
+            return {}
+        if isinstance(value, dict):
+            return {str(key): str(val) for key, val in value.items()}
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return {}
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                parsed = {}
+                for item in raw.split(","):
+                    if "=" not in item:
+                        continue
+                    key, val = item.split("=", 1)
+                    parsed[key.strip()] = val.strip()
+            if isinstance(parsed, dict):
+                return {str(key): str(val) for key, val in parsed.items()}
+        return {}
 
 
 settings = Settings()
