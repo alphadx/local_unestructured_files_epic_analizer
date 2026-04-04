@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DataHealthReport, JobProgress } from "@/lib/api";
 import {
   executeReorganization,
+  getApiBase,
   getJob,
   getReport,
+  setApiBase,
   startScan,
 } from "@/lib/api";
 import ClusterMap from "@/components/ClusterMap";
@@ -18,6 +20,7 @@ type Tab = "dashboard" | "clusters" | "audit";
 
 export default function Home() {
   const [path, setPath] = useState("");
+  const [apiUrl, setApiUrl] = useState(getApiBase());
   const [enablePii, setEnablePii] = useState(true);
   const [enableEmbed, setEnableEmbed] = useState(true);
   const [enableCluster, setEnableCluster] = useState(true);
@@ -46,6 +49,8 @@ export default function Home() {
     setReport(null);
     setJob(null);
     stopPolling();
+
+    setApiBase(apiUrl.trim() || getApiBase());
 
     try {
       const newJob = await startScan({
@@ -118,51 +123,67 @@ export default function Home() {
           <h2 className="mb-4 text-lg font-semibold text-gray-800">
             Iniciar Análisis
           </h2>
-          <div className="flex flex-col gap-4 sm:flex-row">
-            <input
-              type="text"
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              placeholder="/ruta/a/los/archivos"
-              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            <button
-              onClick={handleScan}
-              disabled={!path || (job?.status === "running")}
-              className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {job?.status === "running" ? "Analizando…" : "Analizar"}
-            </button>
-          </div>
 
-          <div className="mt-3 flex gap-5 text-sm">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div className="space-y-4">
+            <div className="grid gap-4">
+              <label className="flex flex-col gap-2 text-sm text-gray-700">
+                <span>API Endpoint</span>
+                <input
+                  type="text"
+                  value={apiUrl}
+                  onChange={(e) => setApiUrl(e.target.value)}
+                  placeholder="http://localhost:8080"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-col gap-4 sm:flex-row">
               <input
-                type="checkbox"
-                checked={enablePii}
-                onChange={(e) => setEnablePii(e.target.checked)}
-                className="rounded"
+                type="text"
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                placeholder="/ruta/a/los/archivos"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-              Detección PII
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={enableEmbed}
-                onChange={(e) => setEnableEmbed(e.target.checked)}
-                className="rounded"
-              />
-              Vectorización
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={enableCluster}
-                onChange={(e) => setEnableCluster(e.target.checked)}
-                className="rounded"
-              />
-              Clustering
-            </label>
+              <button
+                onClick={handleScan}
+                disabled={!path || job?.status === "running"}
+                className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {job?.status === "running" ? "Analizando…" : "Analizar"}
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-5 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enablePii}
+                  onChange={(e) => setEnablePii(e.target.checked)}
+                  className="rounded"
+                />
+                Detección PII
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enableEmbed}
+                  onChange={(e) => setEnableEmbed(e.target.checked)}
+                  className="rounded"
+                />
+                Vectorización
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enableCluster}
+                  onChange={(e) => setEnableCluster(e.target.checked)}
+                  className="rounded"
+                />
+                Clustering
+              </label>
+            </div>
           </div>
         </div>
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import os
+import json
+from typing import Any
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +26,32 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://frontend:3000"]
+    cors_allow_credentials: bool = False
+
+    @field_validator("cors_origins", mode="before")
+    def _parse_cors_origins(cls, value: Any) -> list[str]:
+        if isinstance(value, bool):
+            # Allow explicit false to mean wildcard origin when credentials are disabled.
+            return ["*"]
+
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.lower() == "false":
+                return ["*"]
+            if raw.lower() == "true":
+                return ["*"]
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError:
+                    parsed = []
+                if isinstance(parsed, list):
+                    return [str(item) for item in parsed]
+            if raw == "":
+                return []
+            return [item.strip() for item in raw.split(",") if item.strip()]
+
+        return value
 
 
 settings = Settings()

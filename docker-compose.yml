@@ -30,7 +30,8 @@ services:
       - CHROMA_PORT=8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-10}
-      - CORS_ORIGINS=["http://localhost:3000","http://frontend:3000"]
+      - CORS_ORIGINS=${CORS_ORIGINS:-false}
+      - CORS_ALLOW_CREDENTIALS=${CORS_ALLOW_CREDENTIALS:-false}
     ports:
       - "8080:8080"
     # Mount the target directory read-only so the container can analyse but
