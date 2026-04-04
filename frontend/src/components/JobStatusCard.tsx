@@ -1,0 +1,77 @@
+"use client";
+
+import type { JobProgress } from "@/lib/api";
+
+interface Props {
+  job: JobProgress;
+}
+
+const statusColors: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-800",
+  running: "bg-blue-100 text-blue-800",
+  completed: "bg-green-100 text-green-800",
+  failed: "bg-red-100 text-red-800",
+};
+
+const statusLabels: Record<string, string> = {
+  pending: "Pendiente",
+  running: "Procesando…",
+  completed: "Completado",
+  failed: "Error",
+};
+
+export default function JobStatusCard({ job }: Props) {
+  const pct =
+    job.total_files > 0
+      ? Math.round((job.processed_files / job.total_files) * 100)
+      : 0;
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="font-mono text-xs text-gray-400">{job.job_id}</span>
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[job.status]}`}
+        >
+          {statusLabels[job.status]}
+        </span>
+      </div>
+
+      <p className="mb-3 text-sm text-gray-600">{job.message}</p>
+
+      {job.status === "running" && (
+        <div className="mb-3">
+          <div className="mb-1 flex justify-between text-xs text-gray-500">
+            <span>
+              {job.processed_files} / {job.total_files} archivos
+            </span>
+            <span>{pct}%</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+            <div
+              className="h-full rounded-full bg-blue-500 transition-all duration-500"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {job.status === "completed" && (
+        <div className="flex items-center gap-2 text-sm text-green-600">
+          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fillRule="evenodd"
+              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+              clipRule="evenodd"
+            />
+          </svg>
+          {job.total_files} archivos procesados
+        </div>
+      )}
+
+      {job.status === "failed" && job.error && (
+        <p className="text-sm text-red-500">{job.error}</p>
+      )}
+    </div>
+  );
+}
