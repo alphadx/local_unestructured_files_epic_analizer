@@ -1,0 +1,62 @@
+services:
+  # ─────────────────────────────────────────────────────────────────────────
+  # ChromaDB – ephemeral vector store (data lost on `docker compose down -v`)
+  # ─────────────────────────────────────────────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:0.5.0
+    environment:
+      - IS_PERSISTENT=FALSE
+      - ANONYMIZED_TELEMETRY=FALSE
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Backend – FastAPI engine
+  # ─────────────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_FLASH_MODEL=${GEMINI_FLASH_MODEL:-gemini-2.0-flash}
+      - GEMINI_EMBEDDING_MODEL=${GEMINI_EMBEDDING_MODEL:-models/text-embedding-004}
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-10}
+      - CORS_ORIGINS=["http://localhost:3000","http://frontend:3000"]
+    ports:
+      - "8080:8080"
+    # Mount the target directory read-only so the container can analyse but
+    # never delete or modify files without explicit user approval.
+    volumes:
+      - ${SCAN_PATH:-/tmp/fiasco_test}:/data/scan:ro
+    depends_on:
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Frontend – Next.js dashboard
+  # ─────────────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
