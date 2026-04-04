@@ -1,0 +1,4 @@
+# Optional backend dependencies for advanced features.
+# Install only when HDBSCAN clustering is required.
+
+hdbscan==0.8.33
