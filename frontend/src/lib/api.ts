@@ -1,11 +1,22 @@
 import axios from "axios";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const DEFAULT_API = "http://localhost:8080";
+// Priority: build-time env var -> runtime window override (window.__API_BASE__) -> default
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" ? (window as any).__API_BASE__ : undefined) || DEFAULT_API;
 
 export const api = axios.create({
   baseURL: API_BASE,
   timeout: 30_000,
 });
+
+// Allow changing the API endpoint at runtime (useful in Codespaces/GitHub.dev where localhost isn't reachable)
+export function setApiBase(url: string) {
+  api.defaults.baseURL = url;
+}
+
+export function getApiBase(): string {
+  return api.defaults.baseURL as string;
+}
 
 // ---------------------------------------------------------------------------
 // Types (mirrors backend Pydantic schemas)
