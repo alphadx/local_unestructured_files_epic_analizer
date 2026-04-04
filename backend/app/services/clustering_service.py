@@ -34,6 +34,10 @@ def _try_hdbscan(
         matrix = matrix / norms
 
         clusterer = hdbscan.HDBSCAN(
+            # A minimum cluster size of ~5 % of the corpus avoids overfitting
+            # on small datasets while still forming meaningful groups for
+            # larger collections.  The floor of 2 ensures HDBSCAN can always
+            # form at least one cluster regardless of corpus size.
             min_cluster_size=max(2, len(embeddings) // 20),
             metric="euclidean",
         )

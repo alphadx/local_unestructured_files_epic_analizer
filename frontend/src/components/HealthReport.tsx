@@ -116,7 +116,12 @@ export default function HealthReport({
               {isExecuting ? "Ejecutando…" : "Ejecutar Organización"}
             </button>
           </div>
-          <div className="max-h-48 overflow-y-auto space-y-1 text-xs text-blue-800">
+          <div
+            className="max-h-48 overflow-y-auto space-y-1 text-xs text-blue-800"
+            role="region"
+            aria-label="Plan de reorganización de archivos"
+            tabIndex={0}
+          >
             {report.reorganisation_plan.slice(0, 20).map((p, i) => (
               <div key={i} className="flex items-center gap-1">
                 <span className="truncate text-gray-500 w-1/2">{p.current_path}</span>

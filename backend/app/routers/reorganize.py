@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import logging
+import shutil
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
 
-from app.models.schemas import DataHealthReport
 from app.services import job_manager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/reorganize", tags=["reorganize"])
 
@@ -22,10 +27,6 @@ async def execute_reorganization(job_id: str) -> dict:
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    import os
-    import shutil
-    from pathlib import Path
-
     moved: list[dict] = []
     errors: list[dict] = []
 
@@ -39,8 +40,10 @@ async def execute_reorganization(job_id: str) -> dict:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src), str(dst))
             moved.append({"from": str(src), "to": str(dst)})
-        except Exception as exc:  # noqa: BLE001
-            errors.append({"path": str(src), "error": str(exc)})
+        except OSError as exc:
+            # Log the full exception server-side; return a safe generic message
+            logger.error("Failed to move %s to %s: %s", src, dst, exc)
+            errors.append({"path": str(src), "error": "File move operation failed"})
 
     return {
         "job_id": job_id,

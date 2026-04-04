@@ -172,6 +172,10 @@ def classify_document(file_index: FileIndex) -> DocumentMetadata:
         if mime in _SUPPORTED_MIME_TYPES or path.suffix.lower() == ".pdf":
             file_size = path.stat().st_size
             if file_size > max_bytes:
+                # Files larger than MAX_FILE_SIZE_MB are truncated rather than
+                # rejected.  Classification accuracy may decrease for the
+                # truncated portion, but we still extract useful metadata from
+                # the document header/beginning.
                 with open(path, "rb") as fh:
                     content_bytes = fh.read(max_bytes)
                 parts = [

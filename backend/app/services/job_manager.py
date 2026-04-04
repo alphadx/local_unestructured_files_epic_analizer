@@ -153,7 +153,9 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
     except Exception as exc:  # noqa: BLE001
         logger.exception("Job %s failed", job_id)
         job.status = JobStatus.FAILED
-        job.error = str(exc)
+        # Use repr() to include the exception type in addition to its message,
+        # providing more context for debugging without exposing internal stack traces.
+        job.error = repr(exc)
         job.message = "Error durante el análisis."
 
 

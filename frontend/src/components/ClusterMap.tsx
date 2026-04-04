@@ -26,6 +26,11 @@ export default function ClusterMap({ clusters }: Props) {
     errors: number;
   } | null>(null);
 
+  // Minimum bubble radius (px) at which a text label is rendered
+  const MIN_LABEL_RADIUS = 30;
+  // Maximum number of characters shown in a bubble label
+  const MAX_LABEL_LENGTH = 16;
+
   useEffect(() => {
     if (!svgRef.current || clusters.length === 0) return;
 
@@ -95,8 +100,8 @@ export default function ClusterMap({ clusters }: Props) {
       .attr("fill", "white")
       .attr("pointer-events", "none")
       .text((d) =>
-        d.r > 30
-          ? d.data.label.replace(/_/g, " ").substring(0, 16)
+        d.r > MIN_LABEL_RADIUS
+          ? d.data.label.replace(/_/g, " ").substring(0, MAX_LABEL_LENGTH)
           : ""
       );
   }, [clusters]);

@@ -17,7 +17,7 @@ const POLL_INTERVAL_MS = 2_000;
 type Tab = "dashboard" | "clusters" | "audit";
 
 export default function Home() {
-  const [path, setPath] = useState("/mnt/c/temp/fiasco_test");
+  const [path, setPath] = useState("");
   const [enablePii, setEnablePii] = useState(true);
   const [enableEmbed, setEnableEmbed] = useState(true);
   const [enableCluster, setEnableCluster] = useState(true);

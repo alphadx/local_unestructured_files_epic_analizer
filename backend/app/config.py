@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     # Gemini
     gemini_api_key: str = ""
-    gemini_flash_model: str = "gemini-1.5-flash"
+    gemini_flash_model: str = "gemini-2.0-flash"
     gemini_embedding_model: str = "models/text-embedding-004"
 
     # ChromaDB
