@@ -162,32 +162,30 @@ def extract_document_content(file_index: FileIndex) -> DocumentExtraction:
     extraction_method = "none"
     element_count = 0
 
-    if file_index.extension in _TEXT_EXTENSIONS or (
+    unstructured_text, unstructured_chunks, count = _extract_with_unstructured(path, documento_id)
+    if unstructured_chunks:
+        text = unstructured_text
+        chunks = unstructured_chunks
+        extraction_method = "unstructured"
+        element_count = count
+    elif file_index.extension in _TEXT_EXTENSIONS or (
         file_index.mime_type and file_index.mime_type.startswith("text/")
     ):
         try:
             text = _read_text_file(path)
-            extraction_method = "text-file"
+            if text:
+                chunks = _chunk_text(
+                    documento_id=documento_id,
+                    source_path=str(path),
+                    text=text,
+                    title=path.name,
+                    section_path=[path.parent.as_posix()],
+                )
+                extraction_method = "text-file"
+                element_count = len(chunks)
         except OSError as exc:
             logger.warning("Unable to read text file %s: %s", path, exc)
             text = ""
-        if text:
-            chunks = _chunk_text(
-                documento_id=documento_id,
-                source_path=str(path),
-                text=text,
-                title=path.name,
-                section_path=[path.parent.as_posix()],
-            )
-            element_count = len(chunks)
-
-    if not chunks:
-        unstructured_text, unstructured_chunks, count = _extract_with_unstructured(path, documento_id)
-        if unstructured_chunks:
-            text = unstructured_text
-            chunks = unstructured_chunks
-            extraction_method = "unstructured"
-            element_count = count
 
     if not chunks and text:
         chunks = _chunk_text(
@@ -198,6 +196,8 @@ def extract_document_content(file_index: FileIndex) -> DocumentExtraction:
             section_path=[path.parent.as_posix()],
         )
         element_count = len(chunks)
+        if extraction_method == "none":
+            extraction_method = "text-file"
 
     return DocumentExtraction(
         documento_id=documento_id,
