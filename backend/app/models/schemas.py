@@ -158,3 +158,36 @@ class DataHealthReport(BaseModel):
     consistency_errors: list[str] = Field(default_factory=list)
     clusters: list[Cluster] = Field(default_factory=list)
     reorganisation_plan: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ClusterSummary(BaseModel):
+    cluster_id: str
+    label: str
+    document_count: int
+    inconsistency_count: int
+
+
+class JobStatistics(BaseModel):
+    """Detailed distribution statistics derived from a completed analysis job."""
+
+    job_id: str
+    total_files: int
+    unique_files: int
+    duplicate_files: int
+    # File-system breakdown
+    extension_breakdown: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of files per lowercase extension, e.g. {'.pdf': 12, '.docx': 5}",
+    )
+    # AI-classification breakdown
+    category_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of documents per DocumentCategory value",
+    )
+    # PII risk levels
+    pii_risk_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of documents per RiskLevel value: verde / amarillo / rojo",
+    )
+    # Cluster summary
+    cluster_summary: list[ClusterSummary] = Field(default_factory=list)

@@ -102,6 +102,11 @@ export async function getReport(jobId: string): Promise<DataHealthReport> {
   return data;
 }
 
+export async function getJobLogs(jobId: string): Promise<string[]> {
+  const { data } = await api.get<string[]>(`/api/jobs/${jobId}/logs`);
+  return data;
+}
+
 export async function executeReorganization(
   jobId: string
 ): Promise<{ moved: number; errors: number }> {

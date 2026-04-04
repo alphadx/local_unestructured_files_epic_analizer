@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { JobProgress } from "@/lib/api";
+import { getJobLogs } from "@/lib/api";
 
 interface Props {
   job: JobProgress;
@@ -25,6 +27,44 @@ export default function JobStatusCard({ job }: Props) {
     job.total_files > 0
       ? Math.round((job.processed_files / job.total_files) * 100)
       : 0;
+
+  const [logs, setLogs] = useState<string[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (job.status !== "running" && job.status !== "completed") return;
+
+    const fetchLogs = async () => {
+      try {
+        const entries = await getJobLogs(job.job_id);
+        setLogs(entries);
+      } catch {
+        // network blip – ignore
+      }
+    };
+
+    fetchLogs();
+
+    if (job.status === "running") {
+      pollRef.current = setInterval(fetchLogs, 2_000);
+    }
+
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [job.job_id, job.status]);
+
+  // Auto-scroll log panel to the bottom as new entries arrive
+  useEffect(() => {
+    if (showLogs) {
+      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [logs, showLogs]);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -71,6 +111,31 @@ export default function JobStatusCard({ job }: Props) {
 
       {job.status === "failed" && job.error && (
         <p className="text-sm text-red-500">{job.error}</p>
+      )}
+
+      {/* Live log panel */}
+      {logs.length > 0 && (
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <button
+            onClick={() => setShowLogs((v) => !v)}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <span>{showLogs ? "▾" : "▸"}</span>
+            <span>
+              {showLogs ? "Ocultar logs" : `Ver logs (${logs.length} entradas)`}
+            </span>
+          </button>
+          {showLogs && (
+            <div className="mt-2 max-h-48 overflow-y-auto rounded-lg bg-gray-900 p-3 font-mono text-xs text-gray-300">
+              {logs.map((line, i) => (
+                <div key={i} className="leading-5 whitespace-pre-wrap break-all">
+                  {line}
+                </div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
