@@ -536,6 +536,55 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
+
+                <div className="grid gap-6 lg:grid-cols-2 mt-6">
+                  <div>
+                    <h3 className="mb-3 font-semibold text-gray-800">Heatmap temporal</h3>
+                    <div className="space-y-2">
+                      {exploration.temporal_heatmap.slice(0, 8).map((item) => (
+                        <div key={item.label} className="rounded-lg border border-gray-100 p-3 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span>{item.label}</span>
+                            <span className="text-gray-500">{item.count}</span>
+                          </div>
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
+                            <div
+                              className="h-full rounded-full bg-blue-500"
+                              style={{ width: `${Math.round(item.share * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="mb-3 font-semibold text-gray-800">Grafo de relaciones</h3>
+                    <div className="rounded-lg border border-gray-100 p-3 text-sm">
+                      <div className="mb-3 flex items-center justify-between">
+                        <span className="font-medium text-gray-700">Nodos</span>
+                        <span className="text-gray-500">{exploration.relation_graph.node_count}</span>
+                      </div>
+                      <div className="mb-3 flex items-center justify-between">
+                        <span className="font-medium text-gray-700">Relaciones</span>
+                        <span className="text-gray-500">{exploration.relation_graph.edge_count}</span>
+                      </div>
+                      {exploration.relation_graph.edges.slice(0, 5).map((edge, index) => (
+                        <div key={index} className="mb-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-600">
+                          <div className="font-medium text-gray-800">
+                            {edge.source} → {edge.target}
+                          </div>
+                          <div>
+                            {edge.relation_type} · {edge.count} vez{edge.count === 1 ? "" : "es"}
+                          </div>
+                        </div>
+                      ))}
+                      {exploration.relation_graph.edges.length === 0 && (
+                        <div className="text-gray-500">No se detectaron relaciones semánticas.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

@@ -367,6 +367,33 @@ class TopicSummary(BaseModel):
     share: float = Field(ge=0.0, le=1.0)
 
 
+class RelationNode(BaseModel):
+    id: str
+    label: str
+    kind: str
+    group: str | None = None
+
+
+class RelationEdge(BaseModel):
+    source: str
+    target: str
+    relation_type: str
+    count: int = 1
+
+
+class RelationGraph(BaseModel):
+    nodes: list[RelationNode] = Field(default_factory=list)
+    edges: list[RelationEdge] = Field(default_factory=list)
+    node_count: int = 0
+    edge_count: int = 0
+
+
+class TemporalBucket(BaseModel):
+    label: str
+    count: int
+    share: float = Field(ge=0.0, le=1.0)
+
+
 class CorpusExplorationReport(BaseModel):
     job_id: str
     total_files: int
@@ -377,6 +404,8 @@ class CorpusExplorationReport(BaseModel):
     dominant_categories: list[CorpusFacetItem] = Field(default_factory=list)
     dominant_clusters: list[TopicSummary] = Field(default_factory=list)
     noisy_directories: list[DirectoryHotspot] = Field(default_factory=list)
+    temporal_heatmap: list[TemporalBucket] = Field(default_factory=list)
+    relation_graph: RelationGraph = Field(default_factory=RelationGraph)
     uncategorised_share: float = Field(default=0.0, ge=0.0, le=1.0)
     pii_share: float = Field(default=0.0, ge=0.0, le=1.0)
     concentration_index: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -457,6 +486,10 @@ class JobStatistics(BaseModel):
     directory_breakdown: dict[str, int] = Field(
         default_factory=dict,
         description="Count of documents per directory path",
+    )
+    temporal_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of documents per month bucket (YYYY-MM)",
     )
     # PII risk levels
     pii_risk_distribution: dict[str, int] = Field(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 from app.models.schemas import (
@@ -11,6 +12,10 @@ from app.models.schemas import (
     DirectoryHotspot,
     DocumentMetadata,
     JobStatistics,
+    RelationEdge,
+    RelationGraph,
+    RelationNode,
+    TemporalBucket,
     TopicSummary,
 )
 
@@ -51,6 +56,85 @@ def normalize_directory(path: str) -> str:
     return parent.as_posix() or "."
 
 
+def _bucket_month(date_value: str | None) -> str:
+    if not date_value:
+        return "(desconocido)"
+    try:
+        parsed = datetime.fromisoformat(date_value)
+        return f"{parsed.year}-{parsed.month:02d}"
+    except ValueError:
+        return "(desconocido)"
+
+
+def _document_month_bucket(doc: DocumentMetadata) -> str:
+    month = _bucket_month(doc.fecha_emision)
+    if month == "(desconocido)":
+        return _bucket_month(doc.file_index.modified_at)
+    return month
+
+
+def _build_relation_graph(documents: list[DocumentMetadata]) -> RelationGraph:
+    nodes: dict[str, RelationNode] = {}
+    edges: dict[tuple[str, str, str], int] = {}
+
+    def add_node(node_id: str, label: str, kind: str, group: str | None = None) -> None:
+        if node_id not in nodes:
+            nodes[node_id] = RelationNode(
+                id=node_id,
+                label=label,
+                kind=kind,
+                group=group,
+            )
+
+    def add_edge(source: str, target: str, relation_type: str) -> None:
+        key = (source, target, relation_type)
+        edges[key] = edges.get(key, 0) + 1
+
+    for doc in documents:
+        doc_node_id = f"doc::{doc.documento_id}"
+        add_node(
+            doc_node_id,
+            Path(doc.file_index.path).name or doc.documento_id,
+            "document",
+            doc.categoria.value,
+        )
+
+        if doc.relaciones.id_ot_referencia:
+            ot_node_id = f"ot::{doc.relaciones.id_ot_referencia}"
+            add_node(
+                ot_node_id,
+                doc.relaciones.id_ot_referencia,
+                "work_order",
+                "Orden_Trabajo",
+            )
+            add_edge(doc_node_id, ot_node_id, "referencia_OT")
+
+        if doc.relaciones.id_licitacion_vinculada:
+            tender_node_id = f"tender::{doc.relaciones.id_licitacion_vinculada}"
+            add_node(
+                tender_node_id,
+                doc.relaciones.id_licitacion_vinculada,
+                "tender",
+                "Licitacion",
+            )
+            add_edge(doc_node_id, tender_node_id, "referencia_Licitacion")
+
+    return RelationGraph(
+        nodes=list(nodes.values()),
+        edges=[
+            RelationEdge(
+                source=src,
+                target=tgt,
+                relation_type=rel,
+                count=count,
+            )
+            for (src, tgt, rel), count in edges.items()
+        ],
+        node_count=len(nodes),
+        edge_count=len(edges),
+    )
+
+
 def build_job_statistics(
     job_id: str,
     report: DataHealthReport,
@@ -69,6 +153,7 @@ def build_job_statistics(
     directory_breakdown = Counter(
         normalize_directory(doc.file_index.path) for doc in documents
     )
+    temporal_distribution = Counter(_document_month_bucket(doc) for doc in documents)
     pii_risk_distribution = Counter(doc.pii_info.risk_level.value for doc in documents)
     keyword_distribution = Counter(
         keyword.lower().strip()
@@ -104,6 +189,7 @@ def build_job_statistics(
         mime_breakdown=dict(mime_breakdown),
         size_bucket_distribution=dict(size_bucket_distribution),
         directory_breakdown=dict(directory_breakdown),
+        temporal_distribution=dict(temporal_distribution),
         pii_risk_distribution=dict(pii_risk_distribution),
         keyword_distribution=dict(keyword_distribution),
         semantic_coverage=semantic_coverage,
@@ -183,6 +269,16 @@ def build_corpus_exploration(
         )[:5]
     ]
 
+    temporal_counts = Counter(_document_month_bucket(doc) for doc in documents)
+    temporal_heatmap = [
+        TemporalBucket(label=label, count=count, share=_share(count, total))
+        for label, count in sorted(
+            temporal_counts.items(), key=lambda item: item[0]
+        )
+    ]
+
+    relation_graph = _build_relation_graph(documents)
+
     noisy_directories: list[DirectoryHotspot] = []
     for path, docs in sorted(
         docs_by_directory.items(), key=lambda item: len(item[1]), reverse=True
@@ -219,6 +315,8 @@ def build_corpus_exploration(
         dominant_categories=dominant_categories,
         dominant_clusters=dominant_clusters,
         noisy_directories=noisy_directories,
+        temporal_heatmap=temporal_heatmap,
+        relation_graph=relation_graph,
         uncategorised_share=_share(uncategorised, total),
         pii_share=_share(pii_count, total),
         concentration_index=concentration_index,

@@ -23,6 +23,7 @@ from app.models.schemas import (
     DocumentChunk,
     DuplicateGroup,
     GroupAnalysisResult,
+    GroupMode,
     JobProgress,
     JobStatus,
     ScanRequest,
@@ -281,13 +282,32 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
 
         # --- Step 5: Build health report ---
         job.message = "Generando reporte de salud de datos…"
-        _log(job_id, "INFO", "[Paso 4/5] Generando reporte de salud de datos…")
+        _log(job_id, "INFO", "[Paso 4/6] Generando reporte de salud de datos…")
         report = _build_report(job_id, file_indices, documents, clusters)
         _reports[job_id] = report
 
+        # --- Step 5: Group analysis ---
+        if documents:
+            job.message = "Analizando grupos de directorio…"
+            _log(job_id, "INFO", "[Paso 5/6] Analizando grupos de directorio…")
+            from app.services.grouping_service import analyze_all_groups
+
+            group_analysis = await loop.run_in_executor(
+                None,
+                analyze_all_groups,
+                job_id,
+                documents,
+                GroupMode.STRICT,
+                10,
+            )
+            store_group_analysis(job_id, group_analysis)
+            _log(job_id, "INFO", f"[Paso 5/6] Group analysis completado — {group_analysis.group_count} grupos")
+        else:
+            _log(job_id, "INFO", "[Paso 5/6] No hay documentos para análisis de grupos")
+
         job.status = JobStatus.COMPLETED
         job.message = "Análisis completado."
-        _log(job_id, "INFO", f"[Paso 5/5] Job {job_id} completado exitosamente ✓")
+        _log(job_id, "INFO", f"[Paso 6/6] Job {job_id} completado exitosamente ✓")
 
     except Exception as exc:  # noqa: BLE001
         _log(job_id, "ERROR", f"Job {job_id} falló: {exc!r}")

@@ -108,6 +108,7 @@ export interface JobStatistics {
   mime_breakdown: Record<string, number>;
   size_bucket_distribution: Record<string, number>;
   directory_breakdown: Record<string, number>;
+  temporal_distribution: Record<string, number>;
   pii_risk_distribution: Record<string, number>;
   keyword_distribution: Record<string, number>;
   semantic_coverage: number;
@@ -135,6 +136,33 @@ export interface TopicSummary {
   share: number;
 }
 
+export interface RelationNode {
+  id: string;
+  label: string;
+  kind: string;
+  group?: string | null;
+}
+
+export interface RelationEdge {
+  source: string;
+  target: string;
+  relation_type: string;
+  count: number;
+}
+
+export interface RelationGraph {
+  nodes: RelationNode[];
+  edges: RelationEdge[];
+  node_count: number;
+  edge_count: number;
+}
+
+export interface TemporalBucket {
+  label: string;
+  count: number;
+  share: number;
+}
+
 export interface CorpusExplorationReport {
   job_id: string;
   total_files: number;
@@ -145,6 +173,8 @@ export interface CorpusExplorationReport {
   dominant_categories: CorpusFacetItem[];
   dominant_clusters: TopicSummary[];
   noisy_directories: DirectoryHotspot[];
+  temporal_heatmap: TemporalBucket[];
+  relation_graph: RelationGraph;
   uncategorised_share: number;
   pii_share: number;
   concentration_index: number;
