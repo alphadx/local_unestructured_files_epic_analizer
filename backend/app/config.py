@@ -114,3 +114,6 @@ class Settings(BaseSettings):
                 return parsed
         return {}
 
+
+settings = Settings()
+
