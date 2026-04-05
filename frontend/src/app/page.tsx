@@ -41,6 +41,11 @@ export default function Home() {
   const [enablePii, setEnablePii] = useState(true);
   const [enableEmbed, setEnableEmbed] = useState(true);
   const [enableCluster, setEnableCluster] = useState(true);
+  const [sourceProvider, setSourceProvider] = useState<"local" | "google_drive" | "sharepoint">("local");
+  const [googleDriveFolderId, setGoogleDriveFolderId] = useState("");
+  const [googleDriveServiceAccountJson, setGoogleDriveServiceAccountJson] = useState("");
+  const [sharepointSiteId, setSharepointSiteId] = useState("");
+  const [sharepointDriveId, setSharepointDriveId] = useState("");
 
   const [job, setJob] = useState<JobProgress | null>(null);
   const [report, setReport] = useState<DataHealthReport | null>(null);
@@ -116,8 +121,28 @@ export default function Home() {
     setApiBase(apiUrl.trim() || getApiBase());
 
     try {
+      const sourceOptions: Record<string, string> = {};
+      if (sourceProvider === "google_drive") {
+        if (googleDriveFolderId) {
+          sourceOptions.folder_id = googleDriveFolderId;
+        }
+        if (googleDriveServiceAccountJson) {
+          sourceOptions.service_account_json = googleDriveServiceAccountJson;
+        }
+      }
+      if (sourceProvider === "sharepoint") {
+        if (sharepointSiteId) {
+          sourceOptions.site_id = sharepointSiteId;
+        }
+        if (sharepointDriveId) {
+          sourceOptions.drive_id = sharepointDriveId;
+        }
+      }
+
       const newJob = await startScan({
         path,
+        source_provider: sourceProvider,
+        source_options: sourceOptions,
         enable_pii_detection: enablePii,
         enable_embeddings: enableEmbed,
         enable_clustering: enableCluster,
@@ -271,14 +296,92 @@ export default function Home() {
               </label>
             </div>
 
-            <div className="flex flex-col gap-4 sm:flex-row">
-              <input
-                type="text"
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-                placeholder="/ruta/a/los/archivos"
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-2 text-sm text-gray-700">
+                <span>Proveedor de fuente</span>
+                <select
+                  value={sourceProvider}
+                  onChange={(e) => setSourceProvider(e.target.value as any)}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="local">Local</option>
+                  <option value="google_drive">Google Drive</option>
+                  <option value="sharepoint">SharePoint</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-gray-700">
+                <span>Ruta / ID raíz</span>
+                <input
+                  type="text"
+                  value={path}
+                  onChange={(e) => setPath(e.target.value)}
+                  placeholder={
+                    sourceProvider === "local"
+                      ? "/ruta/a/los/archivos"
+                      : sourceProvider === "google_drive"
+                      ? "Google Drive folder ID"
+                      : "SharePoint path dentro del sitio"
+                  }
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </label>
+            </div>
+
+            {sourceProvider === "google_drive" ? (
+              <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+                <p className="font-medium">Opciones de Google Drive</p>
+                <label className="flex flex-col gap-2 text-sm text-blue-900">
+                  <span>Folder ID</span>
+                  <input
+                    type="text"
+                    value={googleDriveFolderId}
+                    onChange={(e) => setGoogleDriveFolderId(e.target.value)}
+                    placeholder="Carpeta raíz de Google Drive"
+                    className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </label>
+                <label className="flex flex-col gap-2 text-sm text-blue-900">
+                  <span>Service Account JSON</span>
+                  <textarea
+                    value={googleDriveServiceAccountJson}
+                    onChange={(e) => setGoogleDriveServiceAccountJson(e.target.value)}
+                    placeholder="PEM/JSON de cuenta de servicio"
+                    rows={4}
+                    className="min-h-[120px] rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </label>
+              </div>
+            ) : null}
+
+            {sourceProvider === "sharepoint" ? (
+              <div className="space-y-4 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-900">
+                <p className="font-medium">Opciones de SharePoint</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="flex flex-col gap-2 text-sm text-green-900">
+                    <span>Site ID</span>
+                    <input
+                      type="text"
+                      value={sharepointSiteId}
+                      onChange={(e) => setSharepointSiteId(e.target.value)}
+                      placeholder="SharePoint site ID"
+                      className="rounded-lg border border-green-200 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm text-green-900">
+                    <span>Drive ID</span>
+                    <input
+                      type="text"
+                      value={sharepointDriveId}
+                      onChange={(e) => setSharepointDriveId(e.target.value)}
+                      placeholder="SharePoint drive ID"
+                      className="rounded-lg border border-green-200 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <button
                 onClick={handleScan}
                 disabled={!path || job?.status === "running"}

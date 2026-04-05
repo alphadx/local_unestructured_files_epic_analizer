@@ -33,8 +33,12 @@ export interface JobProgress {
   error?: string;
 }
 
+export type SourceProvider = "local" | "google_drive" | "sharepoint";
+
 export interface ScanRequest {
   path: string;
+  source_provider: SourceProvider;
+  source_options?: Record<string, string>;
   enable_pii_detection: boolean;
   enable_embeddings: boolean;
   enable_clustering: boolean;
