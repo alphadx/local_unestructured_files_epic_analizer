@@ -605,12 +605,50 @@ export default function Home() {
 
             {activeTab === "groups" && (
               <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h2 className="mb-4 text-lg font-semibold text-gray-800">
-                  Análisis de Grupos de Directorio
-                </h2>
-                <p className="mb-4 text-sm text-gray-600">
-                  Análisis automático de carpetas con métricas de salud, alertas y similitud entre grupos.
-                </p>
+                <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Análisis de Grupos de Directorio
+                    </h2>
+                    <p className="mt-2 text-sm text-gray-600 max-w-2xl">
+                      Revisa el perfil de cada carpeta, el modo de agrupación usado y cuáles grupos se parecen más entre sí.
+                      El análisis se actualiza automáticamente cuando el job termina.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+                      Grupos: {groupAnalysis?.group_count ?? "—"}
+                    </span>
+                    <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
+                      Modo: {groupAnalysis?.groups?.[0]?.group_mode ?? "strict"}
+                    </span>
+                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                      Similitudes: {groupAnalysis?.group_similarities?.length ?? "—"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mb-6 grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Total de grupos</p>
+                    <p className="mt-2 text-3xl font-semibold text-slate-900">
+                      {groupAnalysis?.group_count ?? "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Grupos saludables</p>
+                    <p className="mt-2 text-3xl font-semibold text-slate-900">
+                      {groupAnalysis ? groupAnalysis.groups.filter((g) => g.health_score >= 80).length : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Carga de análisis</p>
+                    <p className="mt-2 text-3xl font-semibold text-slate-900">
+                      {isLoadingGroups ? "Cargando..." : groupAnalysis ? "Listo" : "Pendiente"}
+                    </p>
+                  </div>
+                </div>
+
                 <GroupAnalysis
                   analysis={groupAnalysis}
                   isLoading={isLoadingGroups}
