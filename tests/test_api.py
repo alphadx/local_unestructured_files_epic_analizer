@@ -368,6 +368,86 @@ class TestReportsEndpoint:
         )
         assert response.status_code == 404
 
+    def test_groups_endpoint_returns_group_analysis(self, tmp_path):
+        (tmp_path / "a.txt").write_text("hola mundo", encoding="utf-8")
+        (tmp_path / "b.txt").write_text("otro archivo", encoding="utf-8")
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        groups_response = client.get(f"/api/reports/{job_id}/groups")
+        assert groups_response.status_code == 200
+        payload = groups_response.json()
+        assert payload["job_id"] == job_id
+        assert payload["group_count"] >= 1
+        assert isinstance(payload["groups"], list)
+
+    def test_group_similarity_endpoint_returns_similar_groups(self, tmp_path):
+        (tmp_path / "a/file1.txt").parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "a/file1.txt").write_text("uno", encoding="utf-8")
+        (tmp_path / "b/file2.txt").parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "b/file2.txt").write_text("dos", encoding="utf-8")
+
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        groups_response = client.get(f"/api/reports/{job_id}/groups")
+        assert groups_response.status_code == 200
+        groups_payload = groups_response.json()
+        assert groups_payload["groups"]
+        group_id = groups_payload["groups"][0]["group_id"]
+
+        similarity_response = client.get(
+            f"/api/reports/{job_id}/groups/{group_id}/similarity"
+        )
+        assert similarity_response.status_code == 200
+        sim_payload = similarity_response.json()
+        assert sim_payload["group_id"] == group_id
+        assert isinstance(sim_payload["similar_groups"], list)
+
+    def test_scan_request_accepts_extended_group_mode(self, tmp_path):
+        (tmp_path / "a/b/file1.txt").parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "a/b/file1.txt").write_text("contenido", encoding="utf-8")
+
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+                "group_mode": "extended",
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        groups_response = client.get(f"/api/reports/{job_id}/groups")
+        assert groups_response.status_code == 200
+        payload = groups_response.json()
+        assert payload["job_id"] == job_id
+        assert payload["group_count"] >= 2
+        group_paths = [g["group_path"] for g in payload["groups"]]
+        assert str(tmp_path) in group_paths
+        assert str(tmp_path / "a") in group_paths
+
 
 class TestRagEndpoint:
     def test_rag_query_endpoint(self, monkeypatch):

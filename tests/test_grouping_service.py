@@ -104,17 +104,20 @@ class TestGroupConstruction:
         assert len(groups) == 1
         assert len(list(groups.values())[0]) == 1
 
-    def test_extended_mode_same_as_strict_for_now(self):
-        """Extended mode behaves same as strict for MVP."""
+    def test_extended_mode_groups_by_ancestor_dirs(self):
+        """Extended mode groups files into each parent directory ancestor."""
         docs = [
             _make_doc("doc1", "/path/a/file1.pdf"),
             _make_doc("doc2", "/path/a/b/file2.pdf"),
         ]
-        groups_strict = build_groups(docs, GroupMode.STRICT)
         groups_extended = build_groups(docs, GroupMode.EXTENDED)
 
-        # Should be same for MVP
-        assert len(groups_strict) == len(groups_extended)
+        assert "/path" in groups_extended
+        assert "/path/a" in groups_extended
+        assert "/path/a/b" in groups_extended
+        assert len(groups_extended["/path"]) == 2
+        assert len(groups_extended["/path/a"]) == 2
+        assert len(groups_extended["/path/a/b"]) == 1
 
 
 class TestFeatureExtraction:

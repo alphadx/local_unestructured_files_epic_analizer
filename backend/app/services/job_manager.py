@@ -315,7 +315,7 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                 analyze_all_groups,
                 job_id,
                 documents,
-                GroupMode.STRICT,
+                request.group_mode,
                 10,
             )
             store_group_analysis(job_id, group_analysis)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from enum import Enum
 from typing import Any
 
@@ -319,6 +320,7 @@ class ScanRequest(BaseModel):
     enable_pii_detection: bool = True
     enable_embeddings: bool = True
     enable_clustering: bool = True
+    group_mode: GroupMode = GroupMode.STRICT
 
     @model_validator(mode="after")
     def validate_remote_source_options(self) -> "ScanRequest":

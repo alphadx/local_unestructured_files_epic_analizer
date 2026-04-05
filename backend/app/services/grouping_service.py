@@ -52,6 +52,18 @@ def _get_parent_directory(file_path: str) -> str:
     return "/" + "/".join(parts)
 
 
+def _get_directory_ancestors(file_path: str) -> list[str]:
+    """Get all ancestor directories for a file path."""
+    parts = _extract_directory_parts(file_path)
+    if not parts:
+        return ["/"]
+
+    ancestors: list[str] = []
+    for depth in range(1, len(parts) + 1):
+        ancestors.append("/" + "/".join(parts[:depth]))
+    return ancestors
+
+
 def build_groups(
     documents: list[DocumentMetadata],
     mode: GroupMode = GroupMode.STRICT,
@@ -77,10 +89,10 @@ def build_groups(
             groups[group_path].append(doc)
 
         elif mode == GroupMode.EXTENDED:
-            # Extended: group = deepest common directory with other files
-            # For MVP, treat as strict; can be enhanced to group subdir hierarchies
-            group_path = _get_parent_directory(file_path)
-            groups[group_path].append(doc)
+            # Extended: group = directory + subtree, so each document belongs to its parent directory
+            # and all ancestor directories.
+            for group_path in _get_directory_ancestors(file_path):
+                groups[group_path].append(doc)
 
     return groups
 
