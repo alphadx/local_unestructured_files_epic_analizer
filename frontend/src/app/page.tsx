@@ -113,6 +113,35 @@ export default function Home() {
     }
   }, []);
 
+  const parseBackendValidationErrors = (err: unknown): Record<string, string> | null => {
+    const axiosError = err as { response?: any };
+    const detail = axiosError?.response?.data?.detail;
+    if (!Array.isArray(detail)) {
+      return null;
+    }
+
+    const fieldNameMap: Record<string, string> = {
+      folder_id: "googleDriveFolderId",
+      service_account_json: "googleDriveServiceAccountJson",
+      site_id: "sharepointSiteId",
+      drive_id: "sharepointDriveId",
+      path: "path",
+    };
+
+    const parsed: Record<string, string> = {};
+    detail.forEach((item: any) => {
+      if (typeof item.msg !== "string") {
+        return;
+      }
+      const loc = Array.isArray(item.loc) ? item.loc : [];
+      const rawField = loc.length > 0 ? String(loc[loc.length - 1]) : "form";
+      const field = fieldNameMap[rawField] ?? rawField;
+      parsed[field] = item.msg;
+    });
+
+    return Object.keys(parsed).length > 0 ? parsed : null;
+  };
+
   const handleScan = async () => {
     setError(null);
     setFormError(null);
@@ -201,6 +230,16 @@ export default function Home() {
         }
       }, POLL_INTERVAL_MS);
     } catch (err: unknown) {
+      const axiosError = err as { response?: any };
+      if (axiosError?.response?.status === 422) {
+        const parsedFieldErrors = parseBackendValidationErrors(err);
+        if (parsedFieldErrors) {
+          setFieldErrors(parsedFieldErrors);
+          setFormError("Corrige los errores del formulario antes de continuar.");
+          return;
+        }
+      }
+
       const message =
         err instanceof Error ? err.message : "Error al iniciar el análisis";
       setError(message);
