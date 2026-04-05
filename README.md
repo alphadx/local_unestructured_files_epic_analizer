@@ -409,7 +409,8 @@ curl -X POST http://localhost:8080/api/jobs \
     "path": "/data/scan",
     "enable_pii_detection": true,
     "enable_embeddings": true,
-    "enable_clustering": true
+    "enable_clustering": true,
+    "group_mode": "strict"
   }'
 ```
 

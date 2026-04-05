@@ -471,6 +471,30 @@ class TestReportsEndpoint:
         assert sim_payload["group_id"] == group_id
         assert isinstance(sim_payload["similar_groups"], list)
 
+    def test_scan_request_defaults_to_strict_group_mode(self, tmp_path):
+        (tmp_path / "a/b/file1.txt").parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "a/b/file1.txt").write_text("contenido", encoding="utf-8")
+
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        groups_response = client.get(f"/api/reports/{job_id}/groups")
+        assert groups_response.status_code == 200
+        payload = groups_response.json()
+        assert payload["job_id"] == job_id
+        group_paths = [g["group_path"] for g in payload["groups"]]
+        assert str(tmp_path / "a/b") in group_paths
+        assert str(tmp_path) not in group_paths
+
     def test_scan_request_accepts_extended_group_mode(self, tmp_path):
         (tmp_path / "a/b/file1.txt").parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / "a/b/file1.txt").write_text("contenido", encoding="utf-8")
