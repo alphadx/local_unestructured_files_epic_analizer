@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Gemini
     gemini_api_key: str = ""
     gemini_flash_model: str = "gemini-2.5-flash"
-    gemini_embedding_model: str = "models/text-embedding-004"
+    gemini_embedding_model: str = "models/text-multilingual-embedding-002"
 
     # ChromaDB
     vector_store_provider: str = "chroma"

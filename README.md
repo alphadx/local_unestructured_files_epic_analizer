@@ -34,7 +34,7 @@ El sistema toma una ruta de directorio (local o montada) y ejecuta un pipeline d
 |------|----------|-------------|
 | 1 | `scanner` | Indexado recursivo: nombre, extensión, tamaño, SHA-256, MIME type, detección de duplicados |
 | 2 | `gemini_service` | Clasificación semántica con **Gemini Flash**: categoría, entidades, relaciones, palabras clave |
-| 3 | `embeddings_service` | Vectorización con **text-embedding-004** → almacenamiento en ChromaDB |
+| 3 | `embeddings_service` | Vectorización con **models/text-multilingual-embedding-002** → almacenamiento en ChromaDB |
 | 4 | `clustering_service` | Agrupación por similitud con **HDBSCAN** (o fallback a etiqueta Gemini) |
 | 5 | `job_manager` | Reporte de salud de datos: duplicados, PII, inconsistencias, plan de reorganización |
 
@@ -72,7 +72,7 @@ El usuario puede revisar el reporte en el dashboard Next.js y — sólo si lo ap
 │                                 └──────────────────┘                      │
 └──────────────────────────────────────────────────────────────────────────┘
 
-External:  Google Gemini API (Flash + text-embedding-004)
+External:  Google Gemini API (Flash + embeddings)
 ```
 
 ### Estructura del repositorio
@@ -91,7 +91,7 @@ External:  Google Gemini API (Flash + text-embedding-004)
 │   │   ├── services/
 │   │   │   ├── scanner.py          # Indexado local de archivos
 │   │   │   ├── gemini_service.py   # Clasificación con Gemini Flash
-│   │   │   ├── embeddings_service.py # Embeddings con text-embedding-004
+│   │   │   ├── embeddings_service.py # Embeddings con Gemini
 │   │   │   ├── clustering_service.py # HDBSCAN + fallback por etiqueta
 │   │   │   └── job_manager.py      # Pipeline async + store en memoria
 │   │   └── db/
@@ -153,7 +153,7 @@ Cada archivo único es enviado a Gemini y se extrae:
 - Si no hay API key, el servicio devuelve metadata stub para no interrumpir el pipeline
 
 ### Vectorización y búsqueda semántica
-- Genera embeddings de 768 dimensiones con `text-embedding-004`
+- Genera embeddings de 768 dimensiones con `models/text-multilingual-embedding-002`
 - Persiste documentos y chunks en **ChromaDB** con métrica coseno
 - Permite búsqueda de documentos similares (`query_similar`)
 - Soporta un ChromaDB remoto o cloud mediante `CHROMA_HOST`, `CHROMA_PORT`, `VECTOR_STORE_SSL` y `VECTOR_STORE_HEADERS`
@@ -281,7 +281,7 @@ docker run -p 8001:8000 chromadb/chroma:0.5.0
 |----------|-------------|-------------|
 | `GEMINI_API_KEY` | `""` | API key de Google AI Studio ([obtener aquí](https://aistudio.google.com/apikey)) |
 | `GEMINI_FLASH_MODEL` | `gemini-2.5-flash` | Modelo de clasificación |
-| `GEMINI_EMBEDDING_MODEL` | `models/text-embedding-004` | Modelo de embeddings |
+| `GEMINI_EMBEDDING_MODEL` | `models/text-multilingual-embedding-002` | Modelo de embeddings |
 | `CHROMA_HOST` | `chromadb` | Host de ChromaDB |
 | `CHROMA_PORT` | `8000` | Puerto de ChromaDB |
 | `CHROMA_COLLECTION` | `documents` | Nombre de la colección |

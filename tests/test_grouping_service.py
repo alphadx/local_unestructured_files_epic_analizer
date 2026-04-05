@@ -396,3 +396,18 @@ class TestCompleteAnalysis:
 
         assert result.analysis_timestamp is not None
         assert result.groups[0].group_mode == GroupMode.EXTENDED
+
+    def test_analyze_all_groups_extended_mode_creates_ancestor_groups(self):
+        """Extended mode should build ancestor directory groups."""
+        docs = [
+            _make_doc("d1", "/path/a/f1.pdf", DocumentCategory.INVOICE),
+            _make_doc("d2", "/path/a/b/f2.pdf", DocumentCategory.CONTRACT),
+        ]
+
+        result = analyze_all_groups("job123", docs, GroupMode.EXTENDED)
+
+        group_paths = {group.group_path for group in result.groups}
+        assert "/path" in group_paths
+        assert "/path/a" in group_paths
+        assert "/path/a/b" in group_paths
+        assert result.group_count == 3

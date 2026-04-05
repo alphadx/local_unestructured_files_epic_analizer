@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """
 Embeddings service – converts text to dense vectors using Gemini
-text-embedding-004 via the google-genai SDK.
+via the google-genai SDK.
 """
 
 import logging
@@ -10,6 +10,8 @@ import logging
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+FALLBACK_EMBEDDING_MODEL = "models/text-multilingual-embedding-002"
 
 
 def embed_text(text: str) -> list[float] | None:
@@ -30,6 +32,27 @@ def embed_text(text: str) -> list[float] | None:
         return result.embeddings[0].values
     except Exception as exc:  # noqa: BLE001
         logger.error("Embedding failed: %s", exc)
+
+        if (
+            settings.gemini_embedding_model == "models/text-embedding-004"
+            and "NOT_FOUND" in str(exc)
+        ):
+            try:
+                from google import genai  # type: ignore
+
+                client = genai.Client(api_key=settings.gemini_api_key)
+                logger.info(
+                    "Falling back to supported embedding model %s",
+                    FALLBACK_EMBEDDING_MODEL,
+                )
+                result = client.models.embed_content(
+                    model=FALLBACK_EMBEDDING_MODEL,
+                    contents=text,
+                )
+                return result.embeddings[0].values
+            except Exception as fallback_exc:  # noqa: BLE001
+                logger.error("Fallback embedding failed: %s", fallback_exc)
+
         return None
 
 
