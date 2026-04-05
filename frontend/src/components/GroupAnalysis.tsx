@@ -51,7 +51,12 @@ function GroupCard({ group }: { group: GroupProfile }) {
     <div className="border border-gray-200 rounded-lg p-4 mb-4">
       <div className="flex justify-between items-start mb-3">
         <div className="flex-1">
-          <h3 className="font-bold text-lg text-gray-900">{group.group_path}</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-bold text-lg text-gray-900">{group.group_path}</h3>
+            <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs font-semibold uppercase text-gray-700">
+              {group.group_mode}
+            </span>
+          </div>
           <p className="text-sm text-gray-600 mt-1">{group.inferred_purpose}</p>
         </div>
         <HealthScoreIndicator score={group.health_score} />
@@ -211,9 +216,26 @@ export default function GroupAnalysis({
   const healthyGroups = analysis.groups.filter((g) => g.health_score >= 80);
   const groupMode = analysis.groups[0]?.group_mode ?? "strict";
   const similarGroupCount = analysis.group_similarities.length;
+  const groupModeDescription =
+    groupMode === "strict"
+      ? "Cada archivo pertenece sólo a su carpeta padre inmediata."
+      : "Cada archivo también se agrega a sus directorios ancestro como grupos adicionales.";
 
   return (
     <div className="space-y-6">
+      <div className="rounded-3xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <span className="font-semibold">Modo de agrupación:</span>
+            <span className="ml-2 font-bold">{groupMode}</span>
+          </div>
+          <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+            {groupMode === "strict" ? "Strict" : "Extended"}
+          </span>
+        </div>
+        <div className="mt-3 text-gray-700">{groupModeDescription}</div>
+      </div>
+
       {/* Summary stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-blue-50 rounded-lg p-4">
@@ -236,17 +258,10 @@ export default function GroupAnalysis({
           </div>
           <div className="text-sm text-gray-600">Modo de agrupación</div>
           <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-100 px-3 py-2 text-xs text-indigo-700">
-            {groupMode === "strict"
-              ? "Agrupa sólo en la carpeta padre inmediata."
-              : "Incluye también los directorios ancestro como grupos adicionales."}
+            {groupModeDescription}
           </div>
         </div>
       </div>
-
-      <p className="text-sm text-gray-600">
-        El análisis se realizó en modo <span className="font-semibold">{groupMode}</span>. Si seleccionas
-        <span className="font-semibold"> extended</span>, los grupos incluyen directorios ancestros.
-      </p>
 
       {similarGroupCount > 0 && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
