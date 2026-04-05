@@ -338,11 +338,15 @@ Ejemplo para SharePoint:
 |--------|------|-------------|
 | `POST` | `/api/rag/query` | Recuperación semántica y respuesta asistida por LLM |
 
+**Ejemplos detallados:** Consulta [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md#2-consultas-rag-generación-aumentada-por-recuperación-apiiargquery) para ejemplos de request/response con casos de uso variados.
+
 ### Search
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | `POST` | `/api/search` | Búsqueda híbrida con filtros por categoría, extensión y directorio |
+
+**Ejemplos detallados:** Consulta [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md#1-búsqueda-documental-apisearch) para ejemplos completos incluyendo filtrados avanzados, interpretación de resultados y guías de integración.
 
 ### Reorganize
 

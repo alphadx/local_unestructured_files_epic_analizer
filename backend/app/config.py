@@ -33,6 +33,18 @@ class Settings(BaseSettings):
     scan_concurrency: int = 4
     log_level: str = "INFO"
 
+    # Content filtering — mime types and extensions
+    # Ingestion mode: "whitelist" (only allow listed extensions/mimetypes) or "blacklist" (allow all except denied)
+    ingestion_mode: str = "blacklist"
+    # Allowed extensions (whitelist mode): e.g., ".txt,.pdf,.docx,.json,.csv"
+    allowed_extensions: str = ""
+    # Denied extensions (blacklist mode): e.g., ".exe,.dll,.so,.bin"
+    denied_extensions: str = ".exe,.dll,.so,.dylib,.bin,.app,.msi,.jar,.com,.bat,.cmd"
+    # Allowed MIME type prefixes: e.g., "text/,application/pdf,image/"
+    allowed_mime_types: str = ""
+    # Denied MIME type prefixes: e.g., "application/x-executable,application/x-sharedlib"
+    denied_mime_types: str = "application/x-executable,application/x-sharedlib,application/x-dvi,application/x-java-applet"
+
     # Security — API key auth (leave empty to disable)
     api_key: str = ""
 
