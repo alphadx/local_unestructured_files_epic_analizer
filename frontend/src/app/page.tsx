@@ -509,6 +509,11 @@ export default function Home() {
                   <option value="strict">Strict (solo directorio inmediato)</option>
                   <option value="extended">Extended (directorio + ancestros)</option>
                 </select>
+                <p className="text-xs text-gray-500">
+                  {groupMode === "strict"
+                    ? "El análisis agrupa cada archivo solo en su carpeta inmediata."
+                    : "El análisis también agregará archivos a las carpetas ancestro del directorio."}
+                </p>
               </label>
             </div>
 

@@ -235,6 +235,11 @@ export default function GroupAnalysis({
             {groupMode}
           </div>
           <div className="text-sm text-gray-600">Modo de agrupación</div>
+          <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-100 px-3 py-2 text-xs text-indigo-700">
+            {groupMode === "strict"
+              ? "Agrupa sólo en la carpeta padre inmediata."
+              : "Incluye también los directorios ancestro como grupos adicionales."}
+          </div>
         </div>
       </div>
 
