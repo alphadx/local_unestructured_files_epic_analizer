@@ -521,7 +521,19 @@ Con esta métrica podremos:
 6. Añadir tests unitarios para construcción de grupos, features y métrica de similitud.
 7. Integrar vista frontend mínima (tabla de grupos + "se parece a").
 
-> Criterio de aceptación propuesto: dado un corpus con carpetas temáticas conocidas, el sistema debe recuperar como similares al menos los grupos equivalentes esperados en el top-3.
+### Tareas futuras recomendadas
+- Investigar una vista de árbol interactiva para el resumen de resultados:
+  - dropdown/dropup del esqueleto del árbol de carpetas.
+  - click en el nombre del archivo para desplegar detalles del archivo.
+  - navegación dentro de carpetas para ver análisis de subcarpetas y sus perfiles.
+- Añadir soporte de exportación/importación de resultados en formato JSON:
+  - exportar metadatos, perfiles de grupo, reportes y resultados de análisis.
+  - diseñar un formato que permita recargar un inventario desde otra fuente sin depender de las embeddings de búsqueda.
+- Implementar un diccionario de checksums (sha256) por archivo:
+  - usar el hash del archivo para saltar procesamiento redundante.
+  - aprovechar cálculos previos de clasificación, PII y metadata cuando el checksum ya existe.
+
+> Criterio de aceptación propuesto: estos items quedan como investigación y definición de requisitos para futuras iteraciones.
 
 ---
 
