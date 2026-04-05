@@ -165,7 +165,7 @@ def _assign_cluster_families(clusters: list[Cluster], docs_by_id: dict[str, Docu
         return
 
     try:
-        from sklearn.cluster import DBSCAN
+        from sklearn.cluster import AgglomerativeClustering
     except ImportError:
         for cluster in clusters:
             cluster.family_label = _simplify_cluster_label(cluster.label)
@@ -173,11 +173,21 @@ def _assign_cluster_families(clusters: list[Cluster], docs_by_id: dict[str, Docu
 
     try:
         matrix = np.vstack(centroids)
-        family_clustering = DBSCAN(
-            eps=0.35,
-            min_samples=1,
-            metric="cosine",
-        ).fit(matrix)
+        try:
+            family_clustering = AgglomerativeClustering(
+                n_clusters=None,
+                distance_threshold=0.35,
+                linkage="average",
+                metric="cosine",
+            ).fit(matrix)
+        except TypeError:
+            family_clustering = AgglomerativeClustering(
+                n_clusters=None,
+                distance_threshold=0.35,
+                linkage="average",
+                affinity="cosine",
+            ).fit(matrix)
+
         family_labels = family_clustering.labels_.tolist()
         family_groups: dict[int, list[Cluster]] = defaultdict(list)
         for cluster, family_id in zip(valid_clusters, family_labels):
@@ -189,9 +199,9 @@ def _assign_cluster_families(clusters: list[Cluster], docs_by_id: dict[str, Docu
         for cluster, family_id in zip(valid_clusters, family_labels):
             cluster.family_label = family_name_by_id[family_id]
 
-        invalid_clusters = [c for c in clusters if c.family_label is None]
-        for cluster in invalid_clusters:
-            cluster.family_label = _simplify_cluster_label(cluster.label)
+        for cluster in clusters:
+            if cluster.family_label is None:
+                cluster.family_label = _simplify_cluster_label(cluster.label)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Family clustering failed: %s", exc)
         for cluster in clusters:
