@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-
 from fastapi import APIRouter, Query
 
 from app.services.audit_log import AuditEntry, get_all, total_count

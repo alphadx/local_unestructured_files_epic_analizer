@@ -118,7 +118,8 @@ class TestJobsEndpoint:
         )
         assert response.status_code == 422
 
-    def test_start_scan_requires_group_mode(self, tmp_path):
+    def test_start_scan_defaults_group_mode_to_strict(self, tmp_path):
+        """Omitting group_mode is allowed — it defaults to 'strict'."""
         (tmp_path / "doc.pdf").write_bytes(b"pdf content")
         response = client.post(
             "/api/jobs",
@@ -129,8 +130,7 @@ class TestJobsEndpoint:
                 "enable_clustering": False,
             },
         )
-        assert response.status_code == 422
-        assert response.json()["detail"][0]["loc"][-1] == "group_mode"
+        assert response.status_code == 202
 
     def test_start_scan_rejects_invalid_group_mode(self, tmp_path):
         (tmp_path / "doc.pdf").write_bytes(b"pdf content")

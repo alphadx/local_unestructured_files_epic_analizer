@@ -143,13 +143,6 @@ def prune_old_jobs() -> int:
     if settings.job_max_age_hours > 0:
         max_age_secs = settings.job_max_age_hours * 3600
         for jid in completed_ids:
-            logs = _job_logs.get(jid, [])
-            if logs:
-                # Rough heuristic: first log entry carries HH:MM:SS, not epoch.
-                # We track creation via _job_creation_times below.
-                pass
-        # Use a creation-time map populated in create_job
-        for jid in completed_ids:
             created = _job_creation_times.get(jid, now)
             if (now - created) > max_age_secs:
                 to_remove.add(jid)
