@@ -95,6 +95,50 @@ class TestJobsEndpoint:
         assert ".py" not in stats_data["extension_breakdown"]
         assert stats_data["total_files"] == 2
 
+    def test_start_scan_e2e_whitelist_rejects_unapproved_files(self, tmp_path):
+        (tmp_path / "allowed.txt").write_text("hello")
+        (tmp_path / "rejected.py").write_text("print('nope')")
+        (tmp_path / "rejected.bin").write_text("binary")
+
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+                "group_mode": "strict",
+                "ingestion_mode": "whitelist",
+                "allowed_extensions": ".txt",
+            },
+        )
+        assert response.status_code == 202
+
+        job_id = response.json()["job_id"]
+        deadline = time.time() + 15
+        final_status = None
+
+        while time.time() < deadline:
+            status_resp = client.get(f"/api/jobs/{job_id}")
+            assert status_resp.status_code == 200
+            job_data = status_resp.json()
+            if job_data["status"] in ("completed", "failed"):
+                final_status = job_data["status"]
+                break
+            time.sleep(0.2)
+
+        assert final_status == "completed", f"Job {job_id} did not complete in time"
+        assert job_data["total_files"] == 1
+
+        stats_resp = client.get(f"/api/reports/{job_id}/statistics")
+        assert stats_resp.status_code == 200
+        stats_data = stats_resp.json()
+        assert stats_data["job_id"] == job_id
+        assert ".txt" in stats_data["extension_breakdown"]
+        assert ".py" not in stats_data["extension_breakdown"]
+        assert ".bin" not in stats_data["extension_breakdown"]
+        assert stats_data["total_files"] == 1
+
     def test_start_scan_passes_filter_overrides_to_pipeline(self, tmp_path, monkeypatch):
         captured: dict[str, object] = {}
 

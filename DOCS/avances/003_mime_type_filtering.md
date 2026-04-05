@@ -30,6 +30,8 @@ Se agregaron 6 nuevas variables de entorno:
 - **`DENIED_MIME_TYPES`**: Prefijos de MIME types denegados
   - Por defecto: `application/x-executable,application/x-sharedlib,application/x-dvi,application/x-java-applet`
 
+> En modo `whitelist`, el sistema requiere al menos `ALLOWED_EXTENSIONS` o `ALLOWED_MIME_TYPES` para procesar archivos. Si no se configura ninguna regla de allow explícita, el filtro rechaza todo por defecto.
+
 ### 2. Módulo de utilidad (`backend/app/services/mime_filter.py`)
 
 Nuevo módulo con funciones:
@@ -84,11 +86,19 @@ uvicorn app.main:app --reload
 3. **Auditoría**: Endpoint `/api/admin/filter-stats` para ver qué se está rechazando
 4. **Benchmarks**: Comparar tiempo de escaneo antes/después del filtrado
 
+## Release Notes
+
+- Corrección de la lógica de ingestión: `whitelist` ahora exige al menos una regla de allow explícita y rechaza todo si no existen reglas de aprobación.
+- Se reforzó el comportamiento de `blacklist` para bloquear extensiones denegadas en el pipeline completo.
+- Cobertura E2E añadida en `tests/test_api.py` para validar que los filtros de ingestión se aplican desde el endpoint `/api/jobs` hasta el reporte final.
+- Actualización de documentación en `README.md` y este documento para reflejar la semántica estricta de `whitelist`.
+
 ## Tests esperados
 
 - `test_mime_filter.py`: Cobertura de `_parse_list()`, `should_process_file()`, `filter_file_index_list()`
 - `test_scanner.py`: Verificar que `detected_extensions` y `skipped_by_filter` se registren correctamente
-- Integración: Confirmar que executables no llegan a `gemini_service`
+- Integración: Confirmar que ejecutables no llegan a `gemini_service`
+- `tests/test_api.py`: E2E pipeline completo para validar que los filtros de `whitelist`/`blacklist` se aplican desde el endpoint hasta el reporte final
 
 ## Archivos afectados
 

@@ -15,6 +15,7 @@
 	- ~~Soportar modo de ingesta basado en lista blanca.~~
 	- ~~Soportar modo alternativo de ingesta de "todo" con exclusiones explícitas.~~
 	- ~~Permitir lista negra para bloquear extensiones concretas aunque estén permitidas por defecto.~~
+- [x] Release note formal: documentación de la corrección de filtros de ingestión y cobertura E2E completa para blacklist/whitelist.
 
 ## Prioridad media: documentación de API y fuentes
 
