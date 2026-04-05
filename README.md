@@ -153,7 +153,7 @@ Cada archivo único es enviado a Gemini y se extrae:
 - Si no hay API key, el servicio devuelve metadata stub para no interrumpir el pipeline
 
 ### Vectorización y búsqueda semántica
-- Genera embeddings de 768 dimensiones con `models/text-multilingual-embedding-002`
+- Genera embeddings con `models/gemini-embedding-001` (u otro modelo compatible de Gemini si se configura)
 - Persiste documentos y chunks en **ChromaDB** con métrica coseno
 - Permite búsqueda de documentos similares (`query_similar`)
 - Soporta un ChromaDB remoto o cloud mediante `CHROMA_HOST`, `CHROMA_PORT`, `VECTOR_STORE_SSL` y `VECTOR_STORE_HEADERS`

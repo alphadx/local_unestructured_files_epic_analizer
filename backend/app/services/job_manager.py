@@ -29,6 +29,7 @@ from app.models.schemas import (
     ScanRequest,
     SourceProvider,
 )
+from app.config import settings
 from app.services.source_service import (
     cleanup_source_path,
     prepare_scan_source,
@@ -233,6 +234,12 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
 
                 embed_text = _build_embedding_text(doc, extraction.text)
                 if embed_text:
+                    _log(
+                        job_id,
+                        "INFO",
+                        f"[Paso 3/5] Embedding documento {doc.documento_id} "
+                        f"path={fi.path} chars={len(embed_text)} model={settings.gemini_embedding_model}",
+                    )
                     embedding = await loop.run_in_executor(
                         None, embeddings_service.embed_text, embed_text
                     )
@@ -242,25 +249,32 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                         partial(vector_store.upsert_document, doc, job_id=job_id),
                     )
 
-                    for chunk in extraction.chunks:
-                        chunk_text = _build_chunk_embedding_text(chunk.text)
-                        if not chunk_text:
-                            continue
-                        chunk.embedding = await loop.run_in_executor(
-                            None, embeddings_service.embed_text, chunk_text
-                        )
-                        await loop.run_in_executor(
-                            None,
-                            partial(
-                                vector_store.upsert_chunk,
-                                chunk,
-                                job_id=job_id,
-                                category=doc.categoria.value,
-                                cluster_sugerido=doc.analisis_semantico.cluster_sugerido or "",
-                                risk_level=doc.pii_info.risk_level.value,
-                                confidence=doc.analisis_semantico.confianza_clasificacion or 0.0,
-                            ),
-                        )
+                for chunk in extraction.chunks:
+                    chunk_text = _build_chunk_embedding_text(chunk.text)
+                    if not chunk_text:
+                        continue
+                    _log(
+                        job_id,
+                        "DEBUG",
+                        f"[Paso 3/5] Embedding chunk {chunk.chunk_index} "
+                        f"documento={doc.documento_id} path={chunk.source_path} "
+                        f"chars={len(chunk_text)}",
+                    )
+                    chunk.embedding = await loop.run_in_executor(
+                        None, embeddings_service.embed_text, chunk_text
+                    )
+                    await loop.run_in_executor(
+                        None,
+                        partial(
+                            vector_store.upsert_chunk,
+                            chunk,
+                            job_id=job_id,
+                            category=doc.categoria.value,
+                            cluster_sugerido=doc.analisis_semantico.cluster_sugerido or "",
+                            risk_level=doc.pii_info.risk_level.value,
+                            confidence=doc.analisis_semantico.confianza_clasificacion or 0.0,
+                        ),
+                    )
 
             documents.append(doc)
 

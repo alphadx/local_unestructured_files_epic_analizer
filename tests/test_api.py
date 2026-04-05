@@ -494,6 +494,31 @@ class TestReportsEndpoint:
         group_paths = [g["group_path"] for g in payload["groups"]]
         assert str(tmp_path / "a/b") in group_paths
         assert str(tmp_path) not in group_paths
+        assert all(g["group_mode"] == "strict" for g in payload["groups"])
+
+    def test_groups_response_preserves_group_mode_in_output(self, tmp_path):
+        (tmp_path / "a/b/file1.txt").parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "a/b/file1.txt").write_text("contenido", encoding="utf-8")
+
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+                "group_mode": "extended",
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        groups_response = client.get(f"/api/reports/{job_id}/groups")
+        assert groups_response.status_code == 200
+        payload = groups_response.json()
+        assert payload["job_id"] == job_id
+        assert payload["groups"]
+        assert all(g["group_mode"] == "extended" for g in payload["groups"])
 
     def test_scan_request_accepts_extended_group_mode(self, tmp_path):
         (tmp_path / "a/b/file1.txt").parent.mkdir(parents=True, exist_ok=True)
