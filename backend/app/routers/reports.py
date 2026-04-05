@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app.models.schemas import (
     CorpusExplorationReport,
@@ -12,6 +13,7 @@ from app.models.schemas import (
     JobStatistics,
 )
 from app.services.analytics_service import build_corpus_exploration, build_job_statistics
+from app.services.export_service import documents_to_csv, documents_to_json_payload
 from app.services import job_manager
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -142,4 +144,40 @@ async def get_group_similarity(job_id: str, group_id: str) -> GroupSimilarityRes
         group_path=group_profile.group_path,
         job_id=job_id,
         similar_groups=relevant_similarities,
+    )
+
+
+@router.get("/{job_id}/export/json")
+async def export_documents_json(job_id: str) -> JSONResponse:
+    """Export full document inventory as JSON."""
+    job = job_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    documents = job_manager.get_documents(job_id)
+    payload = {
+        "job_id": job_id,
+        "total_documents": len(documents),
+        "documents": documents_to_json_payload(documents),
+    }
+    return JSONResponse(content=payload)
+
+
+@router.get("/{job_id}/export/csv")
+async def export_documents_csv(job_id: str) -> PlainTextResponse:
+    """Export full document inventory as CSV."""
+    job = job_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    documents = job_manager.get_documents(job_id)
+    csv_content = documents_to_csv(documents)
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="inventory_{job_id}.csv"'
+    }
+    return PlainTextResponse(
+        content=csv_content,
+        media_type="text/csv",
+        headers=headers,
     )

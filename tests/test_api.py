@@ -151,6 +151,51 @@ class TestReportsEndpoint:
         assert len(chunks) >= 1
         assert chunks[0]["documento_id"]
 
+    def test_export_json_endpoint_returns_inventory(self, tmp_path):
+        (tmp_path / "exportable.txt").write_text("contenido", encoding="utf-8")
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        export_response = client.get(f"/api/reports/{job_id}/export/json")
+        assert export_response.status_code == 200
+        payload = export_response.json()
+        assert payload["job_id"] == job_id
+        assert payload["total_documents"] >= 1
+        assert isinstance(payload["documents"], list)
+
+    def test_export_csv_endpoint_returns_inventory_file(self, tmp_path):
+        (tmp_path / "exportable.md").write_text("# Titulo", encoding="utf-8")
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        export_response = client.get(f"/api/reports/{job_id}/export/csv")
+        assert export_response.status_code == 200
+        assert export_response.headers["content-type"].startswith("text/csv")
+        assert "attachment; filename=\"inventory_" in export_response.headers[
+            "content-disposition"
+        ]
+        body = export_response.text
+        assert "documento_id,path,name,extension" in body
+        assert "exportable.md" in body
+
 
 class TestRagEndpoint:
     def test_rag_query_endpoint(self, monkeypatch):

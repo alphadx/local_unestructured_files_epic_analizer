@@ -314,6 +314,8 @@ La documentación interactiva completa está disponible en `http://localhost:808
 | `GET` | `/api/reports/{job_id}` | Reporte completo de salud de datos |
 | `GET` | `/api/reports/{job_id}/documents` | Lista de documentos clasificados |
 | `GET` | `/api/reports/{job_id}/chunks` | Fragmentos semánticos extraídos |
+| `GET` | `/api/reports/{job_id}/export/json` | Exportar inventario completo en JSON |
+| `GET` | `/api/reports/{job_id}/export/csv` | Exportar inventario completo en CSV |
 | `GET` | `/api/reports/{job_id}/statistics` | Estadísticas de distribución (extensiones, categorías, PII) |
 | `GET` | `/api/reports/{job_id}/exploration` | Exploración de corpus: carpetas, temas, ruido y concentración |
 
@@ -446,7 +448,7 @@ Con esta métrica podremos:
 ### Fase 3 — Persistencia y escala
 - [ ] Reemplazar el store en memoria por **PostgreSQL** (estado de jobs y documentos)
 - [ ] Cola de tareas con **Celery + Redis** para procesar corpus grandes en paralelo
-- [ ] Exportación a CSV / JSON del inventario completo de documentos
+- [x] Exportación a CSV / JSON del inventario completo de documentos
 
 ### Fase 4 — Inteligencia aumentada
 - [ ] **Búsqueda semántica**: consultas en lenguaje natural sobre el corpus (`/api/search`)

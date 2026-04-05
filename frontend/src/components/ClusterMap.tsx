@@ -86,23 +86,6 @@ export default function ClusterMap({ clusters }: Props) {
       .sum((d) => d.value)
       .sort((a, b) => b.value - a.value);
 
-    const data: d3.HierarchyNode<BubbleData> = d3
-      .hierarchy<BubbleData>({
-        id: "root",
-        label: "root",
-        value: 0,
-        inconsistencies: 0,
-        children: Object.entries(families).map(([familyLabel, children]) => ({
-          id: familyLabel,
-          label: familyLabel,
-          value: 0,
-          inconsistencies: 0,
-          children,
-        })),
-      })
-      .sum((d) => d.value)
-      .sort((a, b) => b.value - a.value);
-
     const pack = d3.pack<BubbleData>().size([width, height]).padding(8);
     const root = pack(data);
 
