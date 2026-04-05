@@ -25,6 +25,207 @@ def _normalize_embeddings(embeddings: list[list[float]]) -> np.ndarray:
     return matrix / norms
 
 
+def _simplify_cluster_label(label: str) -> str:
+    if not label:
+        return "Mixto"
+    normalized = label.replace("-", "_").strip("_")
+    parts = [part for part in normalized.split("_") if part]
+    if len(parts) > 1 and parts[-1].isdigit():
+        parts = parts[:-1]
+    if len(parts) > 1 and parts[-1].lower() in {"final", "draft", "borrador", "v1", "v2"}:
+        parts = parts[:-1]
+    return "_".join(parts) or label
+
+
+def _cluster_namer(documents: list[DocumentMetadata]) -> str:
+    if not documents:
+        return "Sin_Cluster"
+
+    label_counts: dict[str, int] = {}
+    for doc in documents:
+        label = doc.analisis_semantico.cluster_sugerido or ""
+        if label:
+            label_counts[label] = label_counts.get(label, 0) + 1
+
+    if label_counts:
+        most_common_label, count = max(label_counts.items(), key=lambda item: item[1])
+        if count / len(documents) >= 0.6:
+            return _simplify_cluster_label(most_common_label)
+
+        base_counts: dict[str, int] = {}
+        for label, label_count in label_counts.items():
+            base = _simplify_cluster_label(label)
+            base_counts[base] = base_counts.get(base, 0) + label_count
+        top_base, top_base_count = max(base_counts.items(), key=lambda item: item[1])
+        if top_base_count / len(documents) >= 0.4:
+            return top_base
+
+    category_counts: dict[str, int] = {}
+    for doc in documents:
+        category_counts[doc.categoria.value] = category_counts.get(doc.categoria.value, 0) + 1
+
+    if category_counts:
+        top_category, top_count = max(category_counts.items(), key=lambda item: item[1])
+        if top_count / len(documents) >= 0.5:
+            return top_category
+        sorted_categories = sorted(category_counts.items(), key=lambda item: item[1], reverse=True)
+        return "Mixto: " + ", ".join(cat for cat, _ in sorted_categories[:2])
+
+    return "Sin_Cluster"
+
+
+def _build_cluster_items(item_ids: list[str], docs_by_id: dict[str, DocumentMetadata]) -> list[ClusterItem]:
+    return [
+        ClusterItem(
+            documento_id=item_id,
+            path=docs_by_id[item_id].file_index.path if item_id in docs_by_id else "",
+            categoria=docs_by_id[item_id].categoria.value if item_id in docs_by_id else "",
+            resumen=docs_by_id[item_id].analisis_semantico.resumen if item_id in docs_by_id else None,
+        )
+        for item_id in item_ids
+        if item_id in docs_by_id
+    ]
+
+
+def _build_clusters_from_labels(
+    labels: list[int],
+    ids: list[str],
+    docs_by_id: dict[str, DocumentMetadata],
+    method: str = "dbscan",
+) -> list[Cluster]:
+    clusters_map: dict[int, list[str]] = defaultdict(list)
+    for item_id, label in zip(ids, labels):
+        clusters_map[int(label)].append(item_id)
+
+    results: list[Cluster] = []
+    for label_id, item_ids in clusters_map.items():
+        if label_id == -1:
+            cluster_label = "Sin_Cluster"
+        else:
+            docs = [docs_by_id[item_id] for item_id in item_ids if item_id in docs_by_id]
+            cluster_label = _cluster_namer(docs)
+
+        results.append(
+            Cluster(
+                cluster_id=f"{method}_cluster_{label_id}",
+                label=cluster_label,
+                document_count=len(item_ids),
+                documents=_build_cluster_items(item_ids, docs_by_id),
+            )
+        )
+    return results
+
+
+def _cluster_centroid(cluster: Cluster, docs_by_id: dict[str, DocumentMetadata]) -> np.ndarray | None:
+    embeddings: list[list[float]] = []
+    for item in cluster.documents:
+        doc = docs_by_id.get(item.documento_id)
+        if doc is None or doc.embedding is None:
+            continue
+        embeddings.append(doc.embedding)
+    if not embeddings:
+        return None
+    arr = np.array(embeddings, dtype=np.float32)
+    centroid = np.mean(arr, axis=0)
+    norm = np.linalg.norm(centroid)
+    if norm == 0:
+        return None
+    return centroid / norm
+
+
+def _family_namer(clusters: list[Cluster]) -> str:
+    if not clusters:
+        return "Familia"
+    label_counts: dict[str, int] = {}
+    for cluster in clusters:
+        label = _simplify_cluster_label(cluster.label)
+        label_counts[label] = label_counts.get(label, 0) + cluster.document_count
+    top_label, count = max(label_counts.items(), key=lambda item: item[1])
+    if count / sum(label_counts.values()) >= 0.5:
+        return top_label
+    if len(label_counts) == 1:
+        return top_label
+    sorted_labels = sorted(label_counts.items(), key=lambda item: item[1], reverse=True)
+    return "Familia: " + ", ".join(label for label, _ in sorted_labels[:2])
+
+
+def _assign_cluster_families(clusters: list[Cluster], docs_by_id: dict[str, DocumentMetadata]) -> None:
+    centroids: list[np.ndarray] = []
+    valid_clusters: list[Cluster] = []
+
+    for cluster in clusters:
+        centroid = _cluster_centroid(cluster, docs_by_id)
+        if centroid is not None:
+            centroids.append(centroid)
+            valid_clusters.append(cluster)
+
+    if len(valid_clusters) < 2:
+        for cluster in clusters:
+            cluster.family_label = _simplify_cluster_label(cluster.label)
+        return
+
+    try:
+        from sklearn.cluster import DBSCAN
+    except ImportError:
+        for cluster in clusters:
+            cluster.family_label = _simplify_cluster_label(cluster.label)
+        return
+
+    try:
+        matrix = np.vstack(centroids)
+        family_clustering = DBSCAN(
+            eps=0.35,
+            min_samples=1,
+            metric="cosine",
+        ).fit(matrix)
+        family_labels = family_clustering.labels_.tolist()
+        family_groups: dict[int, list[Cluster]] = defaultdict(list)
+        for cluster, family_id in zip(valid_clusters, family_labels):
+            family_groups[family_id].append(cluster)
+
+        family_name_by_id: dict[int, str] = {
+            fid: _family_namer(group) for fid, group in family_groups.items()
+        }
+        for cluster, family_id in zip(valid_clusters, family_labels):
+            cluster.family_label = family_name_by_id[family_id]
+
+        invalid_clusters = [c for c in clusters if c.family_label is None]
+        for cluster in invalid_clusters:
+            cluster.family_label = _simplify_cluster_label(cluster.label)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Family clustering failed: %s", exc)
+        for cluster in clusters:
+            cluster.family_label = _simplify_cluster_label(cluster.label)
+
+
+def _try_dbscan(
+    embeddings: list[list[float]],
+    ids: list[str],
+    docs_by_id: dict[str, DocumentMetadata],
+) -> list[Cluster] | None:
+    """Attempt DBSCAN clustering; return None if sklearn is unavailable."""
+    try:
+        from sklearn.cluster import DBSCAN
+    except ImportError:
+        logger.warning("sklearn not installed – DBSCAN unavailable")
+        return None
+
+    try:
+        matrix = _normalize_embeddings(embeddings)
+        clusterer = DBSCAN(
+            eps=0.5,
+            min_samples=max(2, len(embeddings) // 20),
+            metric="cosine",
+        )
+        labels = clusterer.fit_predict(matrix).tolist()
+        if all(label == -1 for label in labels):
+            return None
+        return _build_clusters_from_labels(labels, ids, docs_by_id, method="dbscan")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("DBSCAN clustering failed: %s", exc)
+        return None
+
+
 def _try_hdbscan(
     embeddings: list[list[float]],
     ids: list[str],
@@ -207,11 +408,12 @@ def build_clusters(
     if not documents:
         return []
 
-    if chroma_data:
-        docs_by_id = {d.documento_id: d for d in documents}
+    docs_by_id = {d.documento_id: d for d in documents}
 
+    if chroma_data:
         chunk_result = _try_hdbscan_on_chunks(chroma_data, docs_by_id)
         if chunk_result is not None:
+            _assign_cluster_families(chunk_result, docs_by_id)
             return chunk_result
 
         doc_records = [
@@ -220,11 +422,18 @@ def build_clusters(
         if doc_records:
             ids = [str(item["id"]).removeprefix("doc::") for item in doc_records]
             embeddings = [item["embedding"] for item in doc_records]
-            result = _try_hdbscan(embeddings, ids, docs_by_id)
-            if result is not None:
-                return result
+            dbscan_result = _try_dbscan(embeddings, ids, docs_by_id)
+            if dbscan_result is not None:
+                _assign_cluster_families(dbscan_result, docs_by_id)
+                return dbscan_result
+            hdbscan_result = _try_hdbscan(embeddings, ids, docs_by_id)
+            if hdbscan_result is not None:
+                _assign_cluster_families(hdbscan_result, docs_by_id)
+                return hdbscan_result
 
-    return _label_based_clustering(documents)
+    label_result = _label_based_clustering(documents)
+    _assign_cluster_families(label_result, docs_by_id)
+    return label_result
 
 
 def detect_inconsistencies(clusters: list[Cluster], documents: list[DocumentMetadata]) -> list[Cluster]:

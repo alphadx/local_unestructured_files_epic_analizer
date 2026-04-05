@@ -138,6 +138,7 @@ class Cluster(BaseModel):
     documents: list[ClusterItem] = Field(default_factory=list)
     inconsistencies: list[str] = Field(default_factory=list)
     suggested_path: str | None = None
+    family_label: str | None = None
 
 
 # ---------------------------------------------------------------------------

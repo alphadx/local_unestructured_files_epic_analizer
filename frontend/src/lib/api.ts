@@ -67,6 +67,7 @@ export interface Cluster {
   documents: ClusterItem[];
   inconsistencies: string[];
   suggested_path?: string;
+  family_label?: string | null;
 }
 
 export interface DuplicateGroup {

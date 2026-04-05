@@ -372,9 +372,20 @@ def _build_report(
 
 
 def _build_embedding_text(doc: DocumentMetadata, extracted_text: str | None) -> str:
+    directory_context = " ".join(
+        [
+            doc.file_index.path,
+            doc.file_index.name,
+            doc.file_index.extension,
+            doc.file_index.mime_type or "",
+        ]
+    )
+
     parts = [
         doc.analisis_semantico.resumen,
         " ".join(doc.analisis_semantico.palabras_clave),
+        doc.categoria.value,
+        directory_context,
         extracted_text[:4_000] if extracted_text else None,
     ]
     return " ".join(part for part in parts if part).strip()

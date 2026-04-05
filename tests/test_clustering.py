@@ -19,6 +19,7 @@ from app.models.schemas import (
     SemanticAnalysis,
 )
 from app.services.clustering_service import (
+    _assign_cluster_families,
     _label_based_clustering,
     build_clusters,
     detect_inconsistencies,
@@ -141,6 +142,26 @@ class TestBuildClusters:
         labels = {cluster.label for cluster in clusters}
         assert labels == {"X", "Y"}
         assert all(cluster.document_count == 1 for cluster in clusters)
+
+    def test_assigns_family_label_to_clusters(self):
+        pytest.importorskip("sklearn")
+
+        docs = [
+            _make_doc("a1", "/path/factura_a.pdf", DocumentCategory.INVOICE, "Factura_Proveedor_2025"),
+            _make_doc("a2", "/path/factura_b.pdf", DocumentCategory.INVOICE, "Factura_Proveedor_2026"),
+            _make_doc("b1", "/path/contrato.pdf", DocumentCategory.CONTRACT, "Contrato_Cliente"),
+        ]
+        docs[0].embedding = [1.0, 0.0, 0.0]
+        docs[1].embedding = [1.0, 0.0, 0.0]
+        docs[2].embedding = [0.0, 1.0, 0.0]
+
+        clusters = _label_based_clustering(docs)
+        docs_by_id = {doc.documento_id: doc for doc in docs}
+        _assign_cluster_families(clusters, docs_by_id)
+
+        assert all(cluster.family_label for cluster in clusters)
+        factura_families = {cluster.family_label for cluster in clusters if "Factura" in cluster.label}
+        assert factura_families == {"Factura_Proveedor"}
 
 
 class TestDetectInconsistencies:

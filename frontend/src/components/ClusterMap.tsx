@@ -41,46 +41,63 @@ export default function ClusterMap({ clusters }: Props) {
     svg.selectAll("*").remove();
     svg.attr("viewBox", `0 0 ${width} ${height}`);
 
-    const data: d3.HierarchyNode<BubbleData> = d3.hierarchy<BubbleData>({
-      id: "root",
-      label: "root",
-      value: 0,
-      inconsistencies: 0,
-      children: clusters.map((c) => ({
-        id: c.cluster_id,
-        label: c.label,
-        value: c.document_count,
-        inconsistencies: c.inconsistencies.length,
-      })),
-    }).sum((d) => d.value);
+    const families = clusters.reduce<Record<string, BubbleData[]>>((acc, cluster) => {
+      const family = cluster.family_label || cluster.label;
+      acc[family] = acc[family] || [];
+      acc[family].push({
+        id: cluster.cluster_id,
+        label: cluster.label,
+        value: cluster.document_count,
+        inconsistencies: cluster.inconsistencies.length,
+      });
+      return acc;
+    }, {});
+
+    const data: d3.HierarchyNode<BubbleData> = d3
+      .hierarchy<BubbleData>({
+        id: "root",
+        label: "root",
+        value: 0,
+        inconsistencies: 0,
+        children: Object.entries(families).map(([familyLabel, children]) => ({
+          id: familyLabel,
+          label: familyLabel,
+          value: 0,
+          inconsistencies: 0,
+          children,
+        })),
+      })
+      .sum((d) => d.value)
+      .sort((a, b) => b.value - a.value);
 
     const pack = d3.pack<BubbleData>().size([width, height]).padding(8);
     const root = pack(data);
 
     const colorScale = d3
       .scaleOrdinal<string>()
-      .domain(clusters.map((c) => c.cluster_id))
+      .domain(Object.keys(families))
       .range(d3.schemeTableau10);
 
     const g = svg.append("g");
+    const nodes = g.selectAll("g").data(root.descendants().slice(1)).join("g");
 
-    const node = g
-      .selectAll("g")
-      .data(root.leaves())
-      .join("g")
-      .attr("transform", (d) => `translate(${d.x},${d.y})`);
+    nodes.attr("transform", (d) => `translate(${d.x},${d.y})`);
 
-    node
+    nodes
       .append("circle")
       .attr("r", (d) => d.r)
-      .attr("fill", (d) => colorScale(d.data.id))
-      .attr("fill-opacity", 0.85)
-      .attr("stroke", (d) =>
-        d.data.inconsistencies > 0 ? "#ef4444" : "transparent"
+      .attr("fill", (d) =>
+        d.children ? "transparent" : colorScale(d.parent?.data.label ?? d.data.label)
       )
-      .attr("stroke-width", 2)
-      .style("cursor", "pointer")
+      .attr("fill-opacity", (d) => (d.children ? 0.08 : 0.85))
+      .attr("stroke", (d) =>
+        d.children ? "#6b7280" : d.data.inconsistencies > 0 ? "#ef4444" : "#ffffff"
+      )
+      .attr("stroke-width", (d) => (d.children ? 2 : 1.5))
+      .attr("stroke-dasharray", (d) => (d.children ? "4 3" : "0"))
+      .style("cursor", (d) => (d.children ? "default" : "pointer"))
       .on("mouseover", (event, d) => {
+        if (d.children) return;
         const rect = svgRef.current!.getBoundingClientRect();
         setTooltip({
           x: event.clientX - rect.left,
@@ -92,18 +109,26 @@ export default function ClusterMap({ clusters }: Props) {
       })
       .on("mouseout", () => setTooltip(null));
 
-    node
+    nodes
       .append("text")
       .attr("text-anchor", "middle")
       .attr("dy", "0.3em")
-      .attr("font-size", (d) => Math.min(14, d.r / 3.5))
-      .attr("fill", "white")
+      .attr("font-size", (d) => {
+        if (d.children) {
+          return Math.min(16, d.r / 4);
+        }
+        return Math.min(12, d.r / 4);
+      })
+      .attr("fill", (d) => (d.children ? "#111827" : "white"))
       .attr("pointer-events", "none")
-      .text((d) =>
-        d.r > MIN_LABEL_RADIUS
+      .text((d) => {
+        if (d.children) {
+          return d.r > 30 ? d.data.label.replace(/_/g, " ").substring(0, MAX_LABEL_LENGTH) : "";
+        }
+        return d.r > MIN_LABEL_RADIUS
           ? d.data.label.replace(/_/g, " ").substring(0, MAX_LABEL_LENGTH)
-          : ""
-      );
+          : "";
+      });
   }, [clusters]);
 
   return (
