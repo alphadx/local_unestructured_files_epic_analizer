@@ -126,7 +126,7 @@ External:  Google Gemini API (Flash + embeddings)
 - API de reportes con estadísticas, exploración de corpus, exportación, comparación de scans y análisis de grupos.
 - Dashboard con pestañas para `dashboard`, `clusters`, `groups`, `audit`, `exploration`, `search` y `rag`.
 - Build frontend corregido para producción y tipado consistente en D3/TypeScript.
-- Ajuste del pipeline CSS del frontend para build en Docker: dependencias coherentes entre `package.json` y lockfile, con instalación basada en `package.json` durante la imagen.
+- Ajuste del pipeline CSS del frontend para build en Docker: React/Tailwind/PostCSS alineados con instalación basada en `package.json` durante la imagen.
 - Docker frontend actualizado para no copiar `package-lock.json` desalineado al stage de dependencias, evitando conflictos de Tailwind/PostCSS en `next build`.
 - Frontend alineado con Tailwind v4 y el plugin PostCSS separado para recuperar los estilos utilitarios del dashboard.
 
