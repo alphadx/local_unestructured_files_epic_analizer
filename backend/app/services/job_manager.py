@@ -217,16 +217,26 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
         _log(job_id, "INFO", f"[Paso 1/5] Escaneando directorio '{scan_root}'…")
         t0 = time.monotonic()
         try:
+            # Use override values if provided, otherwise fall back to system settings
+            ingestion_mode = request.ingestion_mode or settings.ingestion_mode
+            allowed_extensions = request.allowed_extensions or settings.allowed_extensions
+            denied_extensions = request.denied_extensions or settings.denied_extensions
+            allowed_mime_types = request.allowed_mime_types or settings.allowed_mime_types
+            denied_mime_types = request.denied_mime_types or settings.denied_mime_types
+
+            if request.ingestion_mode or request.allowed_extensions or request.denied_extensions or request.allowed_mime_types or request.denied_mime_types:
+                _log(job_id, "INFO", f"[Sobrescrito] Usando configuración personalizada de filtrado")
+
             result = await asyncio.wait_for(
                 loop.run_in_executor(
                     None,
                     partial(
                         scan_directory_with_stats,
-                        ingestion_mode=settings.ingestion_mode,
-                        allowed_extensions=settings.allowed_extensions,
-                        denied_extensions=settings.denied_extensions,
-                        allowed_mime_types=settings.allowed_mime_types,
-                        denied_mime_types=settings.denied_mime_types,
+                        ingestion_mode=ingestion_mode,
+                        allowed_extensions=allowed_extensions,
+                        denied_extensions=denied_extensions,
+                        allowed_mime_types=allowed_mime_types,
+                        denied_mime_types=denied_mime_types,
                     ),
                     scan_root,
                 ),

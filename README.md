@@ -178,6 +178,7 @@ Cada archivo único es enviado a Gemini y se extrae:
 - Mapa de burbujas D3.js de los clusters semánticos
 - Panel de estadísticas, exploración de corpus, búsqueda híbrida y asistente RAG
 - Vista de análisis por grupos de directorio con scores de salud, alertas y recomendaciones
+- **[NUEVO ✨]** Componente interactivo `FilterConfiguration` para personalizar reglas de filtrado por job (whitelist/blacklist de extensiones y MIME types)
 - Tablas y gráficos para explorar resultados desde las pestañas del dashboard
 - Visor de logs en tiempo real del pipeline
 
@@ -245,6 +246,8 @@ docker run -p 8001:8000 chromadb/chroma:0.5.0
 | `DENIED_EXTENSIONS` | `.exe,.dll,.so,.dylib,.bin,.app,.msi,.jar,.com,.bat,.cmd` | Extensiones denegadas en modo `blacklist`; formato: `.ext1,.ext2` |
 | `ALLOWED_MIME_TYPES` | `""` | Prefijos de MIME types permitidos en modo `whitelist`; ej: `text/,image/,application/pdf` |
 | `DENIED_MIME_TYPES` | `application/x-executable,application/x-sharedlib,application/x-dvi,application/x-java-applet` | Prefijos de MIME types denegados en modo `blacklist`; formato: `application/x-*` |
+
+> **📝 Nota**: Los valores de `INGESTION_MODE`, `ALLOWED_EXTENSIONS`, `DENIED_EXTENSIONS`, `ALLOWED_MIME_TYPES` y `DENIED_MIME_TYPES` se pueden personalizar **por job** desde el componente `FilterConfiguration` en el formulario del frontend, sin necesidad de reiniciar el backend.
 | `LOG_LEVEL` | `INFO` | Nivel de log (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `CORS_ORIGINS` | `http://localhost:3000` | Orígenes CORS permitidos (lista JSON o `false` para `*`) |
 | `SCAN_PATH` | `/tmp/fiasco_test` | Ruta del host a montar en el contenedor backend |

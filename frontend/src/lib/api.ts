@@ -43,6 +43,14 @@ export interface JobProgress {
 
 export type SourceProvider = "local" | "google_drive" | "sharepoint";
 
+export interface FilterConfiguration {
+  ingestion_mode: string;
+  allowed_extensions: string;
+  denied_extensions: string;
+  allowed_mime_types: string;
+  denied_mime_types: string;
+}
+
 export interface ScanRequest {
   path: string;
   source_provider: SourceProvider;
@@ -51,6 +59,11 @@ export interface ScanRequest {
   enable_embeddings: boolean;
   enable_clustering: boolean;
   group_mode: GroupMode;
+  ingestion_mode?: string;
+  allowed_extensions?: string;
+  denied_extensions?: string;
+  allowed_mime_types?: string;
+  denied_mime_types?: string;
 }
 
 export interface ClusterItem {
@@ -445,5 +458,10 @@ export async function getAuditLog(params?: {
 
 export async function pruneJobs(): Promise<{ pruned: number }> {
   const { data } = await api.post<{ pruned: number }>("/api/jobs/prune");
+  return data;
+}
+
+export async function getFilterConfig(): Promise<FilterConfiguration> {
+  const { data } = await api.get<FilterConfiguration>("/api/admin/filter-config");
   return data;
 }

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
+from app.config import settings
+from app.models.schemas import FilterConfiguration
 from app.services.audit_log import AuditEntry, get_all
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -87,3 +89,26 @@ async def get_filter_stats(
         "total_files_filtered": total_files_filtered,
         "scans": scans,
     }
+
+
+@router.get("/filter-config", response_model=FilterConfiguration)
+async def get_filter_config() -> FilterConfiguration:
+    """
+    Return the current system-wide content filtering configuration.
+
+    Returns:
+        {
+            "ingestion_mode": str,  # "whitelist" or "blacklist"
+            "allowed_extensions": str,  # comma-separated list
+            "denied_extensions": str,  # comma-separated list
+            "allowed_mime_types": str,  # comma-separated list
+            "denied_mime_types": str,  # comma-separated list
+        }
+    """
+    return FilterConfiguration(
+        ingestion_mode=settings.ingestion_mode,
+        allowed_extensions=settings.allowed_extensions,
+        denied_extensions=settings.denied_extensions,
+        allowed_mime_types=settings.allowed_mime_types,
+        denied_mime_types=settings.denied_mime_types,
+    )

@@ -324,6 +324,27 @@ class ScanRequest(BaseModel):
         GroupMode.STRICT,
         description="Grouping mode to use for directory analysis",
     )
+    # Optional overrides for content filtering
+    ingestion_mode: str | None = Field(
+        None,
+        description="Override for ingestion mode: 'whitelist' or 'blacklist'. If None, uses system default.",
+    )
+    allowed_extensions: str | None = Field(
+        None,
+        description="Override for allowed extensions (whitelist mode). Comma-separated list like '.txt,.pdf,.docx'",
+    )
+    denied_extensions: str | None = Field(
+        None,
+        description="Override for denied extensions (blacklist mode). Comma-separated list like '.exe,.dll'",
+    )
+    allowed_mime_types: str | None = Field(
+        None,
+        description="Override for allowed MIME type prefixes. Comma-separated like 'text/,application/pdf'",
+    )
+    denied_mime_types: str | None = Field(
+        None,
+        description="Override for denied MIME type prefixes. Comma-separated like 'application/x-executable'",
+    )
 
     @field_validator("group_mode", mode="before")
     @classmethod
@@ -634,3 +655,23 @@ class RagQueryResponse(BaseModel):
     answer: str | None = None
     context: str
     sources: list[RagSource] = Field(default_factory=list)
+
+
+class FilterConfiguration(BaseModel):
+    """System-wide content filtering configuration."""
+
+    ingestion_mode: str = Field(
+        description="Current ingestion mode: 'whitelist' or 'blacklist'"
+    )
+    allowed_extensions: str = Field(
+        description="Allowed extensions in whitelist mode (comma-separated)"
+    )
+    denied_extensions: str = Field(
+        description="Denied extensions in blacklist mode (comma-separated)"
+    )
+    allowed_mime_types: str = Field(
+        description="Allowed MIME type prefixes (comma-separated)"
+    )
+    denied_mime_types: str = Field(
+        description="Denied MIME type prefixes (comma-separated)"
+    )

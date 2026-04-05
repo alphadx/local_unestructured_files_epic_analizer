@@ -33,6 +33,7 @@ import {
   startScan,
 } from "@/lib/api";
 import ClusterMap from "@/components/ClusterMap";
+import FilterConfiguration from "@/components/FilterConfiguration";
 import GroupAnalysis from "@/components/GroupAnalysis";
 import HealthReport from "@/components/HealthReport";
 import JobStatusCard from "@/components/JobStatusCard";
@@ -56,6 +57,15 @@ export default function Home() {
   const [googleDriveServiceAccountJson, setGoogleDriveServiceAccountJson] = useState("");
   const [sharepointSiteId, setSharepointSiteId] = useState("");
   const [sharepointDriveId, setSharepointDriveId] = useState("");
+
+  // Filter configuration overrides
+  const [filterOverrides, setFilterOverrides] = useState<{
+    ingestion_mode?: string;
+    allowed_extensions?: string;
+    denied_extensions?: string;
+    allowed_mime_types?: string;
+    denied_mime_types?: string;
+  }>({});
 
   const [job, setJob] = useState<JobProgress | null>(null);
   const [report, setReport] = useState<DataHealthReport | null>(null);
@@ -227,6 +237,7 @@ export default function Home() {
         enable_embeddings: enableEmbed,
         enable_clustering: enableCluster,
         group_mode: groupMode,
+        ...filterOverrides,
       });
       setJob(newJob);
 
@@ -505,6 +516,8 @@ export default function Home() {
                 </div>
               </div>
             ) : null}
+
+            <FilterConfiguration onConfigChange={setFilterOverrides} />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <button
