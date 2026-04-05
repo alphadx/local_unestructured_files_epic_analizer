@@ -550,6 +550,18 @@ Con esta métrica podremos:
   - construir un dashboard/tabla de entidades encontradas y su frecuencia
 - Esto permitirá crear una capa de datos de personas/empresas extraídas del corpus que puede usarse para búsquedas, auditorías y cruces posteriores.
 
+### Investigación recomendada — filtrado de contenido para LLM
+- Evitar enviar binarios al LLM es clave: no tiene valor para clasificación/texto y es una pérdida de tiempo.
+- Implementar una etapa local de decisión antes de llamar al LLM:
+  - detectar el tipo de archivo con `mime_type` / extensión
+  - usar herramientas locales simples como `python-magic`/libmagic, `filetype`, o el módulo estándar `mimetypes`
+  - mantener una lista configurable de tipos/ extensiones ignoradas (`application/octet-stream`, ejecutables, imágenes binarias, archivos comprimidos, etc.)
+- Objetivo: sólo pasar al LLM contenido textual o metadatos útiles; los binarios deben ser saltados o procesados con otro flujo especializado.
+- Tarea propuesta:
+  - añadir un filtro de binarios en el scanner o en el servicio de extracción de documentos
+  - exponer una lista de tipos permitidos/denegados en la configuración
+  - documentar el comportamiento para que el sistema no intente clasificar archivos binarios con Gemini
+
 ### Fase 2 — Análisis avanzado
 - [ ] **Estadísticas de distribución**: breakdown por extensión, categoría y nivel de riesgo PII
 - [ ] **Mapa de calor temporal**: distribución de archivos por fecha de emisión/modificación
