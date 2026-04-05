@@ -27,6 +27,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "jsdom": "^23.0.0",
+    "postcss": "^8.4.31",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^1.4.0"
