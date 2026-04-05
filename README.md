@@ -169,63 +169,37 @@ Cada archivo único es enviado a Gemini y se extrae:
 - Contador de archivos con PII
 - Archivos sin categorizar
 - Errores de consistencia agrupados por cluster
-- **Plan de reorganización**: rutas sugeridas basadas en clusters
-
 ### Dashboard frontend
 - Formulario de configuración de escaneo con toggles para PII, embeddings y clustering
 - Polling automático del estado del job (cada 2 segundos)
 - Mapa de burbujas D3.js de los clusters semánticos
-- Vista de auditoría por cluster con inconsistencias
 - Panel de estadísticas, exploración de corpus, búsqueda híbrida y asistente RAG
 - Vista de análisis por grupos de directorio con scores de salud, alertas y recomendaciones
 - Tablas y gráficos para explorar resultados desde las pestañas del dashboard
-- Botón de ejecución de reorganización (con confirmación implícita)
 - Visor de logs en tiempo real del pipeline
 
----
-
-## Requisitos previos
 
 | Herramienta | Versión mínima | Uso |
 |-------------|----------------|-----|
 | Docker + Compose | v2.x | Despliegue completo |
 | Python | 3.12 | Desarrollo backend |
-| Node.js | 18 | Desarrollo frontend |
 | Gemini API key | — | Clasificación y embeddings |
-
-> **Nota:** Sin API key de Gemini el sistema funciona en modo degradado: indexa archivos, detecta duplicados y genera el reporte, pero sin clasificación semántica ni embeddings.
 
 ---
 
 ## Inicio rápido (Docker)
-
-```bash
 # 1. Clonar el repositorio
  Con esta métrica el sistema puede:
 cd local_unestructured_files_epic_analizer
 
 # 2. Crear el archivo de variables de entorno
-Ingresa la URL pública del puerto 8080 (visible en la pestaña *Ports*) antes de iniciar el análisis.
-
----
 
 ## Desarrollo local
-
-### Backend
-
 ```bash
 cd backend
-
-# Crear entorno virtual
-python -m venv .venv
-source .venv/bin/activate       # Linux/macOS
 .venv\Scripts\activate          # Windows
 
-# Instalar dependencias
-pip install -r requirements.txt
-
 # (Opcional) HDBSCAN para clustering avanzado
-pip install hdbscan
 
 # Iniciar servidor de desarrollo
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
@@ -501,26 +475,6 @@ Con esta métrica el sistema puede:
 - Detectar carpetas equivalentes (misma función documental en distintas áreas)
 - Detectar carpetas atípicas (outliers estructurales)
 - Sugerir consolidación o normalización de estructura
-
-### Tareas futuras recomendadas
-- Investigar una vista de árbol interactiva para el resumen de resultados:
-  - dropdown/dropup del esqueleto del árbol de carpetas.
-  - click en el nombre del archivo para desplegar detalles del archivo.
-  - navegación dentro de carpetas para ver análisis de subcarpetas y sus perfiles.
-- Añadir soporte de exportación/importación de resultados en formato JSON:
-  - exportar metadatos, perfiles de grupo, reportes y resultados de análisis.
-  - diseñar un formato que permita recargar un inventario desde otra fuente sin depender de las embeddings de búsqueda.
-- Implementar un diccionario de checksums (sha256) por archivo:
-  - usar el hash del archivo para saltar procesamiento redundante.
-  - aprovechar cálculos previos de clasificación, PII y metadata cuando el checksum ya existe.
-- Investigar asincronía y paralelización para las llamadas HTTP / API:
-  - evaluar qué partes del pipeline pueden hacerse `async`/concurrentes.
-  - revisar `POST /api/jobs`, comunicación con Gemini/ChromaDB y carga de análisis en paralelo.
-  - considerar suites de tareas en paralelo como `asyncio`, `concurrent.futures`, `ray`, `prefect` o `dagster`.
-
-> Criterio de aceptación propuesto: estos items quedan como investigación y definición de requisitos para futuras iteraciones.
-
----
 
 ## Hoja de ruta
 
