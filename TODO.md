@@ -24,5 +24,94 @@
 
 ## Prioridad baja: seguimiento y soporte
 
-- Revisar si la configuración de filtrado debe exponerse también en frontend.
-- Evaluar si las reglas de `mime_type` y extensiones deben quedar reflejadas en la guía de despliegue.
+- ~~Revisar si la configuración de filtrado debe exponerse también en frontend.~~ ✅ **COMPLETADO** — Componente `FilterConfiguration` en frontend; endpoint `/api/admin/filter-config` expone configuración actual.
+- [ ] Evaluar si las reglas de `mime_type` y extensiones deben quedar reflejadas en la guía de despliegue.
+- [ ] **PostgreSQL**: Reemplazar el store en memoria por PostgreSQL (estado de jobs y documentos).
+- [ ] **Celery + Redis**: Cola de tareas para procesamiento paralelo de corpus grandes.
+
+---
+
+## Investigaciones recomendadas
+
+### 1. Filtrado de contenido para LLM (evitar binarios)
+**Objetivo**: Detectar y saltar archivos binarios antes de enviarlos a Gemini.
+
+**Tareas**:
+- [ ] Ampliar el `mime_type_filter` en el scanner o `document_extraction_service` para detectar binarios (`application/octet-stream`, ejecutables, imágenes binarias, archivos comprimidos).
+- [ ] Usar herramientas locales simples: `python-magic`, `filetype` o `mimetypes` estándar.
+- [ ] Mantener lista configurable de tipos/extensiones ignoradas para LLM.
+- [ ] Documentar el nuevo comportamiento en README y USAGE_EXAMPLES.md.
+
+**Beneficios**:
+- Reducir tiempo de procesamiento de Gemini.
+- Evitar enviar contenido sin valor semántico.
+- Mayor control sobre qué archivos pasan al pipeline de clasificación.
+
+**Referencia**:
+- Variables de env existentes: `DENIED_MIME_TYPES`, `ALLOWED_MIME_TYPES`
+- Archivo de referencia: [003_mime_type_filtering.md](DOCS/avances/003_mime_type_filtering.md)
+
+---
+
+### 2. NER y base de datos de contactos
+**Objetivo**: Extraer entidades nombradas (personas, organizaciones, RUTs, emails, teléfonos) del corpus.
+
+**Tareas**:
+- [ ] Agregar campo `named_entities` o `contact_records` en `DocumentMetadata` (schemas.py).
+- [ ] Extender el prompt de Gemini en `gemini_service.py` para devolver NER adicionales además de campos contables (emisor, receptor, monto, moneda).
+- [ ] Crear endpoint `/api/reports/{job_id}/contacts` para listar contactos detectados con frecuencia.
+- [ ] Agregar vista/tabla en frontend para explorar entidades encontradas.
+- [ ] Documentar en USAGE_EXAMPLES.md ejemplos de request/response para contactos.
+
+**Beneficios**:
+- Capa de datos de personas/empresas extraídas sin procesamiento manual.
+- Reutilizable para búsquedas, auditorías y cruces posteriores.
+- Preparar el sistema para funcionalidades de relación gráfica entre entidades.
+
+---
+
+### 3. Ranking moderno — alternativas a BM25
+**Objetivo**: Definir estándar híbrido para búsquedas que combine relevancia textual, semántica y metadatos.
+
+**Tareas**:
+- [ ] Investigar alternativas open source:
+  - `elasticsearch` / `OpenSearch` (BM25 + hybrid vector search)
+  - `pgvector` + SQL + full-text search
+  - `Weaviate`, `Milvus`, `Vespa` (búsquedas semánticas híbridas)
+  - `LanceDB` o `Chroma` (ranking por proximidad de embeddings + metadata filters)
+- [ ] Crear documento de comparación: matriz de criterios (latencia, escalabilidad, mantenibilidad, costo).
+- [ ] Proponer implementación piloto con la alternativa seleccionada.
+- [ ] Definir fórmula de scoring híbrido en nueva sección del README:
+  - 1. Relevancia textual (BM25 / exact match)
+  - 2. Semántica vectorial (coseno / distancia euclidiana)
+  - 3. Señales de confianza y calidad (metadata, PII risk, duplicates)
+
+**Beneficios**:
+- Búsquedas más precisas y relevantes.
+- Preparar el sistema para escala (millones de documentos).
+- Reducir dependencia única de ChromaDB.
+
+---
+
+## Hoja de ruta de fases
+
+### ✅ Fase 1 — Núcleo e ingesta (COMPLETADO)
+- Escaneo recursivo, clasificación con Gemini, embeddings, clustering, detección PII.
+
+### ✅ Fase 2 — Análisis avanzado (COMPLETADO)
+- Estadísticas de distribución, mapa de calor temporal, grafo de relaciones.
+
+### ✅ Fase 3 — Documentación y experiencia (COMPLETADO)
+- Ejemplos de uso exhaustivos (USAGE_EXAMPLES.md), integraciones remotas (Google Drive, SharePoint), filtrado configurable en frontend.
+
+### Fase 4 — Persistencia y escala (_EN INVESTIGACIÓN_)
+- [ ] Reemplazar store en memoria por PostgreSQL.
+- [ ] Implementar cola async con Celery + Redis.
+
+### Fase 5 — Inteligencia avanzada (_EN INVESTIGACIÓN_)
+- [ ] NER generalizado y base de datos de contactos.
+- [ ] Ranking híbrido moderno.
+- [ ] Filtrado mejorado de binarios para LLM.
+
+### ✅ Fase 6 — Seguridad y cumplimiento (COMPLETADO)
+- API keys, auditoría inmutable, políticas de retención.
