@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any
 
 from app.config import settings
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +320,21 @@ class ScanRequest(BaseModel):
     enable_pii_detection: bool = True
     enable_embeddings: bool = True
     enable_clustering: bool = True
-    group_mode: GroupMode = GroupMode.STRICT
+    group_mode: GroupMode = Field(..., description="Grouping mode to use for directory analysis")
+
+    @field_validator("group_mode", mode="before")
+    @classmethod
+    def validate_group_mode(cls, value: Any) -> GroupMode:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            raise ValueError("group_mode is required and must be 'strict' or 'extended'.")
+        if isinstance(value, GroupMode):
+            return value
+        if isinstance(value, str):
+            try:
+                return GroupMode(value)
+            except ValueError:
+                raise ValueError("group_mode must be either 'strict' or 'extended'.")
+        raise ValueError("group_mode must be either 'strict' or 'extended'.")
 
     @model_validator(mode="after")
     def validate_remote_source_options(self) -> "ScanRequest":

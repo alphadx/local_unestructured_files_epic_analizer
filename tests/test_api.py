@@ -44,6 +44,7 @@ class TestJobsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
@@ -60,6 +61,7 @@ class TestJobsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
@@ -78,6 +80,7 @@ class TestJobsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 422
@@ -95,6 +98,7 @@ class TestJobsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 422
@@ -109,9 +113,42 @@ class TestJobsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+                "group_mode": "strict",
             },
         )
         assert response.status_code == 422
+
+    def test_start_scan_requires_group_mode(self, tmp_path):
+        (tmp_path / "doc.pdf").write_bytes(b"pdf content")
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"][0]["loc"][-1] == "group_mode"
+
+    def test_start_scan_rejects_invalid_group_mode(self, tmp_path):
+        (tmp_path / "doc.pdf").write_bytes(b"pdf content")
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+                "group_mode": "invalid_mode",
+            },
+        )
+        assert response.status_code == 422
+        assert any(
+            err["loc"][-1] == "group_mode" and "group_mode must be either 'strict' or 'extended'" in err["msg"]
+            for err in response.json()["detail"]
+        )
 
 
 class TestReportsEndpoint:
@@ -132,6 +169,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
@@ -157,6 +195,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
@@ -184,6 +223,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
@@ -205,6 +245,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
@@ -226,6 +267,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
@@ -254,6 +296,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert base_response.status_code == 202
@@ -270,6 +313,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert target_response.status_code == 202
@@ -304,6 +348,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert base_response.status_code == 202
@@ -318,6 +363,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert target_response.status_code == 202
@@ -347,6 +393,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
@@ -378,6 +425,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
@@ -403,6 +451,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
@@ -505,6 +554,7 @@ class TestSearchEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
+            "group_mode": "strict",
             },
         )
         assert response.status_code == 202
