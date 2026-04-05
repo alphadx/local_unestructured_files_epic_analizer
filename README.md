@@ -127,7 +127,7 @@ External:  Google Gemini API (Flash + embeddings)
 - Dashboard con pestañas para `dashboard`, `clusters`, `groups`, `audit`, `exploration`, `search` y `rag`.
 - Build frontend corregido para producción y tipado consistente en D3/TypeScript.
 - Ajuste del pipeline CSS del frontend para build en Docker: React/Tailwind/PostCSS alineados con instalación basada en `package.json` durante la imagen.
-- Docker frontend actualizado para no copiar `package-lock.json` desalineado al stage de dependencias, evitando conflictos de Tailwind/PostCSS en `next build`.
+- **[NUEVO ✨]** Frontend Dockerfile actualizado para usar `npm ci` (clean install) en lugar de `npm install --package-lock=false`. Mejora reproducibilidad de builds Docker y garantiza determinismo entre ambientes de desarrollo, CI/CD y producción.
 - Frontend alineado con Tailwind v4 y el plugin PostCSS separado para recuperar los estilos utilitarios del dashboard.
 
 ### Indexado de archivos (sin IA)
