@@ -27,6 +27,12 @@ from app.models.schemas import (
     JobProgress,
     JobStatus,
     ScanRequest,
+    SourceProvider,
+)
+from app.services.source_service import (
+    cleanup_source_path,
+    prepare_scan_source,
+    rewrite_remote_paths,
 )
 
 logger = logging.getLogger(__name__)
@@ -143,12 +149,17 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
         from app.services.scanner import scan_directory
 
         loop = asyncio.get_running_loop()
+        scan_root = request.path
+        temp_scan_root = None
 
-        _log(job_id, "INFO", f"[Paso 1/5] Escaneando directorio '{request.path}'…")
+        if request.source_provider != SourceProvider.LOCAL:
+            scan_root, temp_scan_root = prepare_scan_source(request)
+
+        _log(job_id, "INFO", f"[Paso 1/5] Escaneando directorio '{scan_root}'…")
         t0 = time.monotonic()
         try:
             file_indices = await asyncio.wait_for(
-                loop.run_in_executor(None, scan_directory, request.path),
+                loop.run_in_executor(None, scan_directory, scan_root),
                 timeout=_SCAN_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
@@ -157,6 +168,13 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                 f"{_SCAN_TIMEOUT_SECONDS}s. ¿La ruta es una red lenta o un volumen muy grande?"
             )
         elapsed = time.monotonic() - t0
+
+        if temp_scan_root and request.source_options.get("_remote_prefix"):
+            file_indices = rewrite_remote_paths(
+                file_indices,
+                temp_scan_root,
+                request.source_options["_remote_prefix"],
+            )
 
         job.total_files = len(file_indices)
         unique_files = [f for f in file_indices if not f.is_duplicate]
@@ -315,6 +333,9 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
         job.status = JobStatus.FAILED
         job.error = repr(exc)
         job.message = "Error durante el análisis."
+    finally:
+        if temp_scan_root:
+            cleanup_source_path(temp_scan_root)
 
 
 def _build_report(

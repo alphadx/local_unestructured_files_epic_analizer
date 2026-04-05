@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.models.schemas import (
     CorpusExplorationReport,
@@ -15,6 +15,10 @@ from app.models.schemas import (
 )
 from app.services.analytics_service import build_corpus_exploration, build_job_statistics
 from app.services.compare_service import compare_scans
+from app.services.executive_summary_service import (
+    build_executive_summary_text,
+    render_summary_pdf,
+)
 from app.services.export_service import documents_to_csv, documents_to_json_payload
 from app.services import job_manager
 
@@ -218,4 +222,39 @@ async def compare_job_scans(
         target_documents=target_documents,
         include_unchanged=include_unchanged,
         limit=limit,
+    )
+
+
+@router.get("/{job_id}/executive-summary/pdf")
+async def get_executive_summary_pdf(
+    job_id: str,
+    use_gemini: bool = Query(
+        default=True,
+        description="If true, tries to refine summary text with Gemini.",
+    ),
+) -> Response:
+    """Generate and download an executive summary PDF for a completed job."""
+    report = job_manager.get_report(job_id)
+    if report is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Report not found. Job may still be running or does not exist.",
+        )
+
+    documents = job_manager.get_documents(job_id)
+    summary_text = build_executive_summary_text(
+        job_id=job_id,
+        report=report,
+        documents=documents,
+        use_gemini=use_gemini,
+    )
+    pdf_bytes = render_summary_pdf(summary_text)
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="executive_summary_{job_id}.pdf"'
+    }
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers=headers,
     )

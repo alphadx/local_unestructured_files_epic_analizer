@@ -293,6 +293,36 @@ class TestReportsEndpoint:
         response = client.get("/api/reports/does-not-exist/compare/other-job")
         assert response.status_code == 404
 
+    def test_executive_summary_pdf_endpoint_returns_pdf(self, tmp_path):
+        (tmp_path / "summary.txt").write_text("contenido base", encoding="utf-8")
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        pdf_response = client.get(
+            f"/api/reports/{job_id}/executive-summary/pdf?use_gemini=false"
+        )
+        assert pdf_response.status_code == 200
+        assert pdf_response.headers["content-type"].startswith("application/pdf")
+        assert "attachment; filename=\"executive_summary_" in pdf_response.headers[
+            "content-disposition"
+        ]
+        assert pdf_response.content.startswith(b"%PDF-1.4")
+
+    def test_executive_summary_pdf_nonexistent_job(self):
+        response = client.get(
+            "/api/reports/nonexistent-id/executive-summary/pdf?use_gemini=false"
+        )
+        assert response.status_code == 404
+
 
 class TestRagEndpoint:
     def test_rag_query_endpoint(self, monkeypatch):

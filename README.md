@@ -294,6 +294,13 @@ docker run -p 8001:8000 chromadb/chroma:0.5.0
 | `LOG_LEVEL` | `INFO` | Nivel de log (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `CORS_ORIGINS` | `http://localhost:3000` | Orígenes CORS permitidos (lista JSON o `false` para `*`) |
 | `SCAN_PATH` | `/tmp/fiasco_test` | Ruta del host a montar en el contenedor backend |
+| `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` | `{}` | Credenciales JSON de cuenta de servicio de Google Drive para escanear carpetas remotas |
+| `GOOGLE_DRIVE_FOLDER_ID` | `""` | ID de carpeta raíz en Google Drive para el scan remoto |
+| `SHAREPOINT_TENANT_ID` | `""` | Tenant ID de Azure AD para acceso a SharePoint |
+| `SHAREPOINT_CLIENT_ID` | `""` | Client ID de aplicación registrada en Azure AD |
+| `SHAREPOINT_CLIENT_SECRET` | `""` | Client secret de la aplicación de Azure AD |
+| `SHAREPOINT_SITE_ID` | `""` | Site ID de SharePoint que contiene el drive |
+| `SHAREPOINT_DRIVE_ID` | `""` | Drive ID de SharePoint para el scan remoto |
 
 ---
 
@@ -314,6 +321,37 @@ La documentación interactiva completa está disponible en `http://localhost:808
 ```json
 {
   "path": "/ruta/absoluta/a/analizar",
+  "source_provider": "local",
+  "source_options": {},
+  "enable_pii_detection": true,
+  "enable_embeddings": true,
+  "enable_clustering": true
+}
+```
+
+Ejemplo para Google Drive:
+```json
+{
+  "path": "<GOOGLE_DRIVE_FOLDER_ID>",
+  "source_provider": "google_drive",
+  "source_options": {
+    "folder_id": "<GOOGLE_DRIVE_FOLDER_ID>"
+  },
+  "enable_pii_detection": true,
+  "enable_embeddings": true,
+  "enable_clustering": true
+}
+```
+
+Ejemplo para SharePoint:
+```json
+{
+  "path": "<path/within/site>",
+  "source_provider": "sharepoint",
+  "source_options": {
+    "site_id": "<SHAREPOINT_SITE_ID>",
+    "drive_id": "<SHAREPOINT_DRIVE_ID>"
+  },
   "enable_pii_detection": true,
   "enable_embeddings": true,
   "enable_clustering": true
@@ -330,6 +368,7 @@ La documentación interactiva completa está disponible en `http://localhost:808
 | `GET` | `/api/reports/{job_id}/export/json` | Exportar inventario completo en JSON |
 | `GET` | `/api/reports/{job_id}/export/csv` | Exportar inventario completo en CSV |
 | `GET` | `/api/reports/{base_job_id}/compare/{target_job_id}` | Comparar scans: nuevos/modificados/eliminados |
+| `GET` | `/api/reports/{job_id}/executive-summary/pdf` | Generar y descargar resumen ejecutivo en PDF |
 | `GET` | `/api/reports/{job_id}/statistics` | Estadísticas de distribución (extensiones, categorías, PII) |
 | `GET` | `/api/reports/{job_id}/exploration` | Exploración de corpus: carpetas, temas, ruido y concentración |
 
@@ -515,9 +554,9 @@ Con esta métrica podremos:
 - [x] Exportación a CSV / JSON del inventario completo de documentos
 
 ### Fase 4 — Inteligencia aumentada
-- [ ] **Búsqueda semántica**: consultas en lenguaje natural sobre el corpus (`/api/search`)
+- [x] **Búsqueda semántica**: consultas en lenguaje natural sobre el corpus (`/api/search`)
 - [x] **Comparación entre scans**: detectar archivos nuevos/modificados/eliminados
-- [ ] **Resumen ejecutivo**: generación de reporte PDF con Gemini
+- [x] **Resumen ejecutivo**: generación de reporte PDF con Gemini
 - [ ] Soporte para **SharePoint** y **Google Drive** como fuente de datos
 
 ### Fase 5 — Seguridad y cumplimiento

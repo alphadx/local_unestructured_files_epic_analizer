@@ -302,8 +302,19 @@ class GroupAnalysisResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class SourceProvider(str, Enum):
+    LOCAL = "local"
+    SHAREPOINT = "sharepoint"
+    GOOGLE_DRIVE = "google_drive"
+
+
 class ScanRequest(BaseModel):
-    path: str = Field(..., description="Absolute path to scan (read-only)")
+    path: str = Field(..., description="Absolute path to scan (read-only, or remote root if using a source provider)")
+    source_provider: SourceProvider = SourceProvider.LOCAL
+    source_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Provider-specific options for remote source scanning",
+    )
     enable_pii_detection: bool = True
     enable_embeddings: bool = True
     enable_clustering: bool = True

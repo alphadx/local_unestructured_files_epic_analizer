@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     max_file_size_mb: int = 10
     scan_concurrency: int = 4
     log_level: str = "INFO"
+
+    # Remote source integrations
+    google_drive_service_account_json: dict[str, Any] = Field(default_factory=dict)
+    google_drive_folder_id: str = ""
+    sharepoint_tenant_id: str = ""
+    sharepoint_client_id: str = ""
+    sharepoint_client_secret: str = ""
+    sharepoint_site_id: str = ""
+    sharepoint_drive_id: str = ""
 
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://frontend:3000"]
@@ -86,5 +95,22 @@ class Settings(BaseSettings):
                 return {str(key): str(val) for key, val in parsed.items()}
         return {}
 
+    @field_validator("google_drive_service_account_json", mode="before")
+    @classmethod
+    def _parse_google_drive_service_account_json(cls, value: Any) -> dict[str, Any]:
+        if value in (None, "", {}):
+            return {}
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return {}
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                return {}
+            if isinstance(parsed, dict):
+                return parsed
+        return {}
 
-settings = Settings()
