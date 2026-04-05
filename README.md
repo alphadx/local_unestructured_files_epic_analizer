@@ -21,7 +21,7 @@
 7. [Variables de entorno](#variables-de-entorno)
 8. [Referencia de API](#referencia-de-api)
 9. [Testing](#testing)
-10. [Análisis por grupos de directorio (próxima tarea)](#análisis-por-grupos-de-directorio-próxima-tarea)
+10. [Análisis por grupos de directorio](#análisis-por-grupos-de-directorio)
 11. [Hoja de ruta](#hoja-de-ruta)
 
 ---
@@ -120,12 +120,12 @@ External:  Google Gemini API (Flash + embeddings)
 
 ## Funcionalidades
 
-### Actualización reciente
-- Implementación de navegación por familias de clusters en el dashboard.
-- Mapa de burbujas de clusters con selección de familia y cluster individual.
-- Backend mejorado de clustering con `AgglomerativeClustering` para subagrupaciones más estables.
-- Extensión de la API de reportes con exploración de corpus y metadatos de grupo.
-- Corrección de build frontend para producción y tipado de D3/TypeScript.
+### Estado actual
+- Navegación por familias de clusters y selección de cluster individual en el dashboard.
+- Vista de análisis por grupos de directorio con perfiles, alertas, recomendaciones y similitud entre grupos.
+- API de reportes con estadísticas, exploración de corpus, exportación, comparación de scans y análisis de grupos.
+- Dashboard con pestañas para `dashboard`, `clusters`, `groups`, `audit`, `exploration`, `search` y `rag`.
+- Build frontend corregido para producción y tipado consistente en D3/TypeScript.
 
 ### Indexado de archivos (sin IA)
 - Escaneo recursivo completo, sin límite de profundidad
@@ -177,6 +177,8 @@ Cada archivo único es enviado a Gemini y se extrae:
 - Mapa de burbujas D3.js de los clusters semánticos
 - Vista de auditoría por cluster con inconsistencias
 - Panel de estadísticas, exploración de corpus, búsqueda híbrida y asistente RAG
+- Vista de análisis por grupos de directorio con scores de salud, alertas y recomendaciones
+- Tablas y gráficos para explorar resultados desde las pestañas del dashboard
 - Botón de ejecución de reorganización (con confirmación implícita)
 - Visor de logs en tiempo real del pipeline
 
@@ -199,40 +201,10 @@ Cada archivo único es enviado a Gemini y se extrae:
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/alphadx/local_unestructured_files_epic_analizer.git
+ Con esta métrica el sistema puede:
 cd local_unestructured_files_epic_analizer
 
 # 2. Crear el archivo de variables de entorno
-cp .env.example .env
-# Editar .env: añadir GEMINI_API_KEY y ajustar SCAN_PATH
-# Si usas un vector store cloud, configura CHROMA_HOST, CHROMA_PORT,
-# VECTOR_STORE_SSL y VECTOR_STORE_HEADERS para apuntar al servicio remoto.
-
-# 3. Levantar los tres servicios
-docker compose up --build
-
-# 4. Abrir el dashboard
-open http://localhost:3000
-```
-
-Una vez levantado:
-
-| Servicio | URL |
-|----------|-----|
-| Dashboard | http://localhost:3000 |
-| Backend API | http://localhost:8080 |
-| Swagger UI | http://localhost:8080/docs |
-| ChromaDB | http://localhost:8001 |
-
-### Docker images
-- `local_unestructured_files_epic_analizer-backend`: backend FastAPI
-- `local_unestructured_files_epic_analizer-frontend`: frontend Next.js
-
-Puedes verificar las imágenes locales con `docker images | grep local_unestructured_files_epic_analizer`
-
-### Uso en Codespaces / GitHub.dev
-
-El campo **"API Endpoint"** del dashboard permite configurar la URL del backend en tiempo de ejecución.  
 Ingresa la URL pública del puerto 8080 (visible en la pestaña *Ports*) antes de iniciar el análisis.
 
 ---
@@ -380,6 +352,8 @@ Ejemplo para SharePoint:
 | `GET` | `/api/reports/{job_id}/executive-summary/pdf` | Generar y descargar resumen ejecutivo en PDF |
 | `GET` | `/api/reports/{job_id}/statistics` | Estadísticas de distribución (extensiones, categorías, PII) |
 | `GET` | `/api/reports/{job_id}/exploration` | Exploración de corpus: carpetas, temas, ruido y concentración |
+| `GET` | `/api/reports/{job_id}/groups` | Análisis de grupos de directorio |
+| `GET` | `/api/reports/{job_id}/groups/{group_id}/similarity` | Grupos similares a un grupo concreto |
 
 ### RAG
 
@@ -463,26 +437,26 @@ Los tests cubren:
 
 ---
 
-## Análisis por grupos de directorio (próxima tarea)
+## Análisis por grupos de directorio
 
-La siguiente iteración incorporará análisis de contexto de carpeta para que un archivo no se evalúe sólo por su contenido individual, sino también por el patrón del directorio donde vive.
+Esta capacidad ya está implementada y expuesta tanto en el backend como en el dashboard. El análisis toma la estructura de carpetas como señal adicional para priorizar reorganización, detección de ruido y comparación entre grupos.
 
-### 1) Prerrequisito: indexación completa del árbol
+### 1) Indexación del árbol
 
-Para tratar carpetas como grupos, primero debemos tener el inventario indexado:
+Para tratar carpetas como grupos, el inventario debe estar indexado con:
 - Nodos de archivo con: ruta, hash, categoría, entidades, embedding y señales de riesgo (PII, ruido, duplicados)
 - Nodos de directorio con: ruta normalizada, profundidad y relación padre/hijo
 - Relación archivo → directorio y agregados por carpeta (conteos, diversidad, distribución temporal)
 
-Sin esta capa de indexación no es posible construir una representación consistente de grupo.
+Sin esta capa no se puede construir una representación consistente de grupo.
 
-### 2) ¿Cómo tratar un grupo?
+### 2) Modos de agrupación
 
-Un **grupo** será una unidad derivada de estructura de árbol, con dos modos:
+Un **grupo** es una unidad derivada de la estructura de árbol, con dos modos:
 - **Modo estricto**: un grupo = un directorio (sin subdirectorios)
 - **Modo extendido**: un grupo = un directorio + subárbol (incluye descendientes)
 
-El modo de agrupación se puede controlar enviando `group_mode` en el payload de `POST /api/jobs`.
+El modo de agrupación se controla con `group_mode` en el payload de `POST /api/jobs`.
 
 Cada grupo tendrá un `group_profile` con features agregadas:
 - Distribución de categorías documentales (ej.: facturas, contratos, licitaciones)
@@ -491,7 +465,7 @@ Cada grupo tendrá un `group_profile` con features agregadas:
 - Señales operativas: ratio de duplicados, ratio de PII, archivos sin clasificar
 - Señales temporales: concentración por período fiscal/fecha de emisión
 
-### 3) ¿Cómo analizar un grupo?
+### 3) Análisis de grupo
 
 El análisis combinará estadística + semántica:
 - **Coherencia interna**: qué tan homogéneo es el grupo respecto a su tema dominante
@@ -505,7 +479,7 @@ Salida esperada por grupo:
 - `alerts`: inconsistencias o riesgo
 - `representative_docs`: ejemplos más centrales del grupo
 
-### 4) ¿Cómo decidir que un grupo se parece a otro?
+### 4) Similitud entre grupos
 
 Usaremos una similitud híbrida entre perfiles de grupo:
 
@@ -519,22 +493,14 @@ Donde:
 - $\Delta_{pii}$ y $\Delta_{dup}$: diferencia normalizada de tasas de PII y duplicados
 - $w_k$: pesos calibrables según objetivo (compliance, operación, orden documental)
 
-Con esta métrica podremos:
+### 5) Interfaz disponible
+
+El dashboard expone esta información en la pestaña **Groups**, donde se ven perfiles, alertas, recomendaciones y enlaces para cargar similitudes por grupo.
+
+Con esta métrica el sistema puede:
 - Detectar carpetas equivalentes (misma función documental en distintas áreas)
 - Detectar carpetas atípicas (outliers estructurales)
 - Sugerir consolidación o normalización de estructura
-
-### 5) Plan del siguiente turno (implementación)
-
-1. Extender modelos (`schemas`) con entidades de grupo: `GroupProfile`, `GroupSimilarity`, `GroupAnalysisResult`.
-2. Crear servicio `grouping_service` para construir grupos en modo estricto/extendido desde archivos indexados.
-3. Implementar extracción de features agregadas y centroides por grupo.
-4. Implementar motor de similitud híbrida y ranking top-k de grupos similares.
-5. Exponer endpoints iniciales:
-  - `GET /api/reports/{job_id}/groups`
-  - `GET /api/reports/{job_id}/groups/similarity`
-6. Añadir tests unitarios para construcción de grupos, features y métrica de similitud.
-7. Integrar vista frontend mínima (tabla de grupos + "se parece a").
 
 ### Tareas futuras recomendadas
 - Investigar una vista de árbol interactiva para el resumen de resultados:
