@@ -84,7 +84,7 @@ export default function ClusterMap({ clusters }: Props) {
         })),
       })
       .sum((d) => d.value)
-      .sort((a, b) => b.value - a.value);
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
 
     const pack = d3.pack<BubbleData>().size([width, height]).padding(8);
     const root = pack(data);
