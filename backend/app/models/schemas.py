@@ -141,6 +141,162 @@ class Cluster(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Group analysis schemas (análisis por grupos de directorio)
+# ---------------------------------------------------------------------------
+
+
+class GroupMode(str, Enum):
+    STRICT = "strict"  # grupo = directorio (sin subdirectorios)
+    EXTENDED = "extended"  # grupo = directorio + subárbol (include descendientes)
+
+
+class GroupFeatures(BaseModel):
+    """Agregated features extracted from a directory group."""
+
+    # Estructura
+    group_path: str
+    depth: int
+    file_count: int
+    unique_file_count: int
+    duplicate_count: int
+
+    # Distribuciones
+    category_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of documents per DocumentCategory",
+    )
+    extension_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of files per extension",
+    )
+    mime_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of files per MIME type",
+    )
+
+    # Señales semánticas
+    semantic_centroid: list[float] | None = Field(
+        default=None, exclude=True, description="Mean embedding vector of the group"
+    )
+    semantic_dispersion: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Standard deviation of embeddings within group (0=homogeneous)",
+    )
+    dominant_category: str | None = None
+    dominant_category_share: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    # Señales operativas
+    pii_detection_count: int = 0
+    pii_share: float = Field(default=0.0, ge=0.0, le=1.0)
+    pii_risk_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count per RiskLevel (verde/amarillo/rojo)",
+    )
+    uncategorised_count: int = 0
+    uncategorised_share: float = Field(default=0.0, ge=0.0, le=1.0)
+    duplicate_share: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    # Señales temporales
+    fiscal_period_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of documents per fiscal period (YYYY-MM)",
+    )
+    date_range_start: str | None = None
+    date_range_end: str | None = None
+
+
+class GroupProfile(BaseModel):
+    """Complete profile of a directory group."""
+
+    group_id: str
+    job_id: str
+    group_path: str
+    group_mode: GroupMode
+    created_at: str
+
+    # Aggregated features
+    features: GroupFeatures
+
+    # Analysis results
+    inferred_purpose: str | None = None
+    health_score: float = Field(default=0.0, ge=0.0, le=100.0)
+    health_factors: dict[str, float] = Field(
+        default_factory=dict,
+        description="Breakdown of health_score: coherence, coverage, quality, risk",
+    )
+
+    # Alerts and recommendations
+    alerts: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+
+    # Representative documents (most central to group's semantic profile)
+    representative_docs: list[str] = Field(
+        default_factory=list,
+        description="List of documento_id values most representative of the group",
+    )
+
+
+class GroupSimilarity(BaseModel):
+    """Similarity between two directory groups."""
+
+    group_a_id: str
+    group_b_id: str
+    group_a_path: str
+    group_b_path: str
+
+    # Similarity components (each 0.0-1.0)
+    semantic_similarity: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Cosine similarity of centroids"
+    )
+    category_overlap: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Jaccard-like overlap of categories"
+    )
+    operational_similarity: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Similarity of PII and duplicate profiles",
+    )
+
+    # Composite score
+    composite_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Weighted combination of components"
+    )
+
+    # Interpretation
+    similarity_level: str = Field(
+        default="dissimilar",
+        description="Categorical level: dissimilar / similar / equivalent",
+    )
+    interpretation: str | None = None
+
+
+class GroupSimilarityResponse(BaseModel):
+    """Response with top-k similar groups."""
+
+    group_id: str
+    group_path: str
+    job_id: str
+    similar_groups: list[GroupSimilarity] = Field(
+        default_factory=list, description="Ranked by composite_score descending"
+    )
+
+
+class GroupAnalysisResult(BaseModel):
+    """Complete result of analysis on all groups in a job."""
+
+    job_id: str
+    group_count: int
+    total_groups_analyzed: int
+    groups: list[GroupProfile] = Field(default_factory=list)
+    group_similarities: list[GroupSimilarity] = Field(
+        default_factory=list, description="Top-k similarities detected"
+    )
+    analysis_timestamp: str
+
+
+# ---------------------------------------------------------------------------
 # Job / scan schemas
 # ---------------------------------------------------------------------------
 

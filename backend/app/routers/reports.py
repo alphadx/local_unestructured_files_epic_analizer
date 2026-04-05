@@ -7,6 +7,8 @@ from app.models.schemas import (
     DataHealthReport,
     DocumentChunk,
     DocumentMetadata,
+    GroupAnalysisResult,
+    GroupSimilarityResponse,
     JobStatistics,
 )
 from app.services.analytics_service import build_corpus_exploration, build_job_statistics
@@ -76,3 +78,68 @@ async def get_exploration(job_id: str) -> CorpusExplorationReport:
 
     documents = job_manager.get_documents(job_id)
     return build_corpus_exploration(job_id, report, documents)
+
+
+@router.get("/{job_id}/groups", response_model=GroupAnalysisResult)
+async def get_groups(job_id: str) -> GroupAnalysisResult:
+    """
+    Return the directory group analysis for a completed job.
+
+    Includes all detected groups with their feature profiles, health scores,
+    and top k similarities between groups.
+    """
+    job = job_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    analysis = job_manager.get_group_analysis(job_id)
+    if analysis is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Group analysis not available. Job may still be running or does not exist.",
+        )
+
+    return analysis
+
+
+@router.get(
+    "/{job_id}/groups/{group_id}/similarity", response_model=GroupSimilarityResponse
+)
+async def get_group_similarity(job_id: str, group_id: str) -> GroupSimilarityResponse:
+    """
+    Return similar groups for a given group.
+
+    Filters the computed similarities to show only those involving the specified group,
+    ranked by composite similarity score.
+    """
+    analysis = job_manager.get_group_analysis(job_id)
+    if analysis is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Group analysis not available.",
+        )
+
+    # Find the group profile
+    group_profile = next((g for g in analysis.groups if g.group_id == group_id), None)
+    if group_profile is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Group {group_id} not found in job {job_id}.",
+        )
+
+    # Filter similarities to include only this group
+    relevant_similarities = [
+        s
+        for s in analysis.group_similarities
+        if s.group_a_id == group_id or s.group_b_id == group_id
+    ]
+
+    # Sort by composite score
+    relevant_similarities.sort(key=lambda x: x.composite_score, reverse=True)
+
+    return GroupSimilarityResponse(
+        group_id=group_id,
+        group_path=group_profile.group_path,
+        job_id=job_id,
+        similar_groups=relevant_similarities,
+    )

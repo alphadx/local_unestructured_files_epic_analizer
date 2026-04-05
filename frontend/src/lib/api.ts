@@ -221,6 +221,76 @@ export interface RagQueryResponse {
   sources: RagSource[];
 }
 
+// Group analysis types
+export type GroupMode = "strict" | "extended";
+
+export interface GroupFeatures {
+  group_path: string;
+  depth: number;
+  file_count: number;
+  unique_file_count: number;
+  duplicate_count: number;
+  category_distribution: Record<string, number>;
+  extension_distribution: Record<string, number>;
+  mime_distribution: Record<string, number>;
+  semantic_dispersion: number;
+  dominant_category?: string | null;
+  dominant_category_share: number;
+  pii_detection_count: number;
+  pii_share: number;
+  pii_risk_distribution: Record<string, number>;
+  uncategorised_count: number;
+  uncategorised_share: number;
+  duplicate_share: number;
+  fiscal_period_distribution: Record<string, number>;
+  date_range_start?: string | null;
+  date_range_end?: string | null;
+}
+
+export interface GroupProfile {
+  group_id: string;
+  job_id: string;
+  group_path: string;
+  group_mode: GroupMode;
+  created_at: string;
+  features: GroupFeatures;
+  inferred_purpose?: string | null;
+  health_score: number;
+  health_factors: Record<string, number>;
+  alerts: string[];
+  recommendations: string[];
+  representative_docs: string[];
+}
+
+export interface GroupSimilarity {
+  group_a_id: string;
+  group_b_id: string;
+  group_a_path: string;
+  group_b_path: string;
+  semantic_similarity: number;
+  category_overlap: number;
+  operational_similarity: number;
+  composite_score: number;
+  similarity_level: "dissimilar" | "similar" | "equivalent";
+  interpretation?: string | null;
+}
+
+export interface GroupSimilarityResponse {
+  group_id: string;
+  group_path: string;
+  job_id: string;
+  similar_groups: GroupSimilarity[];
+}
+
+export interface GroupAnalysisResult {
+  job_id: string;
+  group_count: number;
+  total_groups_analyzed: number;
+  groups: GroupProfile[];
+  group_similarities: GroupSimilarity[];
+  analysis_timestamp: string;
+}
+
 // ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
@@ -279,5 +349,20 @@ export async function executeReorganization(
   jobId: string
 ): Promise<{ moved: number; errors: number }> {
   const { data } = await api.post(`/api/reorganize/${jobId}/execute`);
+  return data;
+}
+
+export async function getGroups(jobId: string): Promise<GroupAnalysisResult> {
+  const { data } = await api.get<GroupAnalysisResult>(`/api/reports/${jobId}/groups`);
+  return data;
+}
+
+export async function getGroupSimilarities(
+  jobId: string,
+  groupId: string
+): Promise<GroupSimilarityResponse> {
+  const { data } = await api.get<GroupSimilarityResponse>(
+    `/api/reports/${jobId}/groups/${groupId}/similarity`
+  );
   return data;
 }

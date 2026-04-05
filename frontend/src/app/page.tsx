@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CorpusExplorationReport,
   DataHealthReport,
+  GroupAnalysisResult,
+  GroupSimilarityResponse,
   JobProgress,
   JobStatistics,
   RagQueryResponse,
@@ -14,6 +16,8 @@ import {
   executeReorganization,
   getApiBase,
   getExploration,
+  getGroups,
+  getGroupSimilarities,
   getJob,
   getReport,
   getStatistics,
@@ -23,12 +27,13 @@ import {
   startScan,
 } from "@/lib/api";
 import ClusterMap from "@/components/ClusterMap";
+import GroupAnalysis from "@/components/GroupAnalysis";
 import HealthReport from "@/components/HealthReport";
 import JobStatusCard from "@/components/JobStatusCard";
 
 const POLL_INTERVAL_MS = 2_000;
 
-type Tab = "dashboard" | "clusters" | "audit" | "exploration" | "search" | "rag";
+type Tab = "dashboard" | "clusters" | "groups" | "audit" | "exploration" | "search" | "rag";
 
 export default function Home() {
   const [path, setPath] = useState("");
@@ -41,10 +46,12 @@ export default function Home() {
   const [report, setReport] = useState<DataHealthReport | null>(null);
   const [statistics, setStatistics] = useState<JobStatistics | null>(null);
   const [exploration, setExploration] = useState<CorpusExplorationReport | null>(null);
+  const [groupAnalysis, setGroupAnalysis] = useState<GroupAnalysisResult | null>(null);
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
   const [ragResponse, setRagResponse] = useState<RagQueryResponse | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
@@ -73,6 +80,7 @@ export default function Home() {
   const resetInsights = useCallback(() => {
     setStatistics(null);
     setExploration(null);
+    setGroupAnalysis(null);
     setSearchResponse(null);
     setRagResponse(null);
   }, []);
@@ -80,12 +88,16 @@ export default function Home() {
   const loadInsights = useCallback(async (jobId: string) => {
     setIsLoadingInsights(true);
     try {
-      const [stats, exp] = await Promise.all([
+      const [stats, exp, groups] = await Promise.all([
         getStatistics(jobId),
         getExploration(jobId),
+        getGroups(jobId).catch(() => null),
       ]);
       setStatistics(stats);
       setExploration(exp);
+      if (groups) {
+        setGroupAnalysis(groups);
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error al cargar analíticas";
       setError(message);
@@ -201,6 +213,7 @@ export default function Home() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "dashboard", label: "Dashboard" },
     { id: "clusters", label: "Mapa de Clusters" },
+    { id: "groups", label: "Análisis de Grupos" },
     { id: "audit", label: "Auditoría" },
     { id: "exploration", label: "Exploración" },
     { id: "search", label: "Búsqueda" },
@@ -359,6 +372,30 @@ export default function Home() {
 
             {activeTab === "clusters" && (
               <ClusterMap clusters={report.clusters} />
+            )}
+
+            {activeTab === "groups" && (
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h2 className="mb-4 text-lg font-semibold text-gray-800">
+                  Análisis de Grupos de Directorio
+                </h2>
+                <p className="mb-4 text-sm text-gray-600">
+                  Análisis automático de carpetas con métricas de salud, alertas y similitud entre grupos.
+                </p>
+                <GroupAnalysis
+                  analysis={groupAnalysis}
+                  isLoading={isLoadingGroups}
+                  onLoadSimilarities={async (groupId) => {
+                    if (!job) throw new Error("Job not found");
+                    setIsLoadingGroups(true);
+                    try {
+                      return await getGroupSimilarities(job.job_id, groupId);
+                    } finally {
+                      setIsLoadingGroups(false);
+                    }
+                  }}
+                />
+              </div>
             )}
 
             {activeTab === "audit" && (

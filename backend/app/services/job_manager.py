@@ -22,6 +22,7 @@ from app.models.schemas import (
     DocumentMetadata,
     DocumentChunk,
     DuplicateGroup,
+    GroupAnalysisResult,
     JobProgress,
     JobStatus,
     ScanRequest,
@@ -43,6 +44,8 @@ _chunks: dict[str, list[DocumentChunk]] = {}
 _job_logs: dict[str, list[str]] = {}
 # job_id -> active websocket subscriber queues for live logs
 _log_subscribers: dict[str, list[asyncio.Queue[str]]] = defaultdict(list)
+# job_id -> GroupAnalysisResult (once completed)
+_group_analysis: dict[str, GroupAnalysisResult] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +74,14 @@ def get_documents(job_id: str) -> list[DocumentMetadata]:
 
 def get_chunks(job_id: str) -> list[DocumentChunk]:
     return _chunks.get(job_id, [])
+
+
+def get_group_analysis(job_id: str) -> GroupAnalysisResult | None:
+    return _group_analysis.get(job_id)
+
+
+def store_group_analysis(job_id: str, analysis: GroupAnalysisResult) -> None:
+    _group_analysis[job_id] = analysis
 
 
 def get_logs(job_id: str) -> list[str]:
