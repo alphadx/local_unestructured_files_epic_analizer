@@ -45,6 +45,7 @@ def should_process_file(
     if isinstance(file_path, str):
         file_path = Path(file_path)
 
+    ingestion_mode = (ingestion_mode or "blacklist").strip().lower()
     extension = file_path.suffix.lower()
     mime_type = mime_type or ""
 
@@ -55,7 +56,9 @@ def should_process_file(
 
     # Check extension-based filtering
     if ingestion_mode == "whitelist":
-        # Whitelist mode: extension must be in allowed list
+        # Whitelist mode: at least one allow rule must match.
+        if not allowed_exts and not allowed_mimes:
+            return False, "no whitelist rules configured"
         if allowed_exts and extension not in allowed_exts:
             return False, f"extension not in whitelist: {extension}"
     else:

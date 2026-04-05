@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 from app.services.scanner import scan_directory, _is_noise, _sha256
+from app.services.mime_filter import should_process_file
 
 
 # ---------------------------------------------------------------------------
@@ -145,3 +146,37 @@ class TestScanDirectory:
     def test_empty_directory(self, tmp_path):
         results = scan_directory(tmp_path)
         assert results == []
+
+
+class TestMimeFiltering:
+    def test_blacklist_blocks_denied_extension(self, tmp_path):
+        allowed, reason = should_process_file(
+            tmp_path / "blocked.py",
+            None,
+            ingestion_mode="blacklist",
+            denied_extensions=".py",
+        )
+
+        assert allowed is False
+        assert reason == "extension in blacklist: .py"
+
+    def test_whitelist_requires_explicit_allow_rules(self, tmp_path):
+        allowed, reason = should_process_file(
+            tmp_path / "blocked.txt",
+            None,
+            ingestion_mode="whitelist",
+        )
+
+        assert allowed is False
+        assert reason == "no whitelist rules configured"
+
+    def test_whitelist_allows_listed_extension(self, tmp_path):
+        allowed, reason = should_process_file(
+            tmp_path / "allowed.txt",
+            None,
+            ingestion_mode="whitelist",
+            allowed_extensions=".txt,.pdf",
+        )
+
+        assert allowed is True
+        assert reason == ""

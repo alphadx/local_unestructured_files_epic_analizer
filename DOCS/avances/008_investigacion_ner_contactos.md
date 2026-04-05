@@ -182,7 +182,8 @@ Texto:
 - ❌ Dependencia de API remota
 
 **Modelos recomendados**:
-- `gemini-2.5-flash` — Rápido, barato, bueno para volumen alto (~usado actualmente)
+- `gemini-2.5-flash-lite` — Rápido, barato, bueno para bajo volumen, precisión aceptable (~usado actualmente)
+- `gemini-2.5-flash` — Rápido, barato, bueno para volumen alto
 - `gemini-1.5-pro` — Más preciso, más caro
 - `gpt-4-turbo` — OpenAI, excelente calidad pero muy caro
 - `claude-3.5-sonnet` — Anthropic, buen balance costo/calidad

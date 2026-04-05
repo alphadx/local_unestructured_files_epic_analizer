@@ -230,7 +230,7 @@ docker run -p 8001:8000 chromadb/chroma:0.5.0
 | Variable | Por defecto | Descripción |
 |----------|-------------|-------------|
 | `GEMINI_API_KEY` | `""` | API key de Google AI Studio ([obtener aquí](https://aistudio.google.com/apikey)) |
-| `GEMINI_FLASH_MODEL` | `gemini-2.5-flash` | Modelo de clasificación |
+| `GEMINI_FLASH_MODEL` | `gemini-2.5-flash-lite` | Modelo de clasificación |
 | `GEMINI_EMBEDDING_MODEL` | `models/text-multilingual-embedding-002` | Modelo de embeddings |
 | `CHROMA_HOST` | `chromadb` | Host de ChromaDB |
 | `CHROMA_PORT` | `8000` | Puerto de ChromaDB |

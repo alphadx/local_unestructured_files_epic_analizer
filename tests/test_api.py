@@ -52,6 +52,36 @@ class TestJobsEndpoint:
         assert "job_id" in data
         assert data["status"] in ("pending", "running", "completed")
 
+    def test_start_scan_passes_filter_overrides_to_pipeline(self, tmp_path, monkeypatch):
+        captured: dict[str, object] = {}
+
+        async def fake_run_pipeline(job_id, request):
+            captured["job_id"] = job_id
+            captured["request"] = request
+
+        monkeypatch.setattr("app.services.job_manager.run_pipeline", fake_run_pipeline)
+
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+                "group_mode": "strict",
+                "ingestion_mode": "whitelist",
+                "allowed_extensions": ".txt,.pdf",
+                "denied_extensions": ".py",
+            },
+        )
+
+        assert response.status_code == 202
+        assert "job_id" in captured
+        request = captured["request"]
+        assert request.ingestion_mode == "whitelist"
+        assert request.allowed_extensions == ".txt,.pdf"
+        assert request.denied_extensions == ".py"
+
     def test_start_scan_job_retrievable(self, tmp_path):
         (tmp_path / "doc.pdf").write_bytes(b"pdf content")
         response = client.post(
