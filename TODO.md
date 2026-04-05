@@ -9,6 +9,9 @@
 	- ~~Evitar clasificar binarios, ejecutables o archivos no textuales.~~
 	- ~~Mantener la decisión de filtrado cerca del scanner o del extractor.~~
 - ~~Introducir listas configurables de extensiones permitidas y denegadas.~~ **✅ COMPLETADO** — Variables en `.env`: `INGESTION_MODE`, `ALLOWED_EXTENSIONS`, `DENIED_EXTENSIONS`, `ALLOWED_MIME_TYPES`, `DENIED_MIME_TYPES`.
+	- [ ] Clarificar la diferencia entre `GEMINI_FLASH_MODEL` y `GEMINI_EMBEDDING_MODEL`.
+	- [ ] Añadir un paso de skip temprano para archivos sin texto extraíble antes de clasificación/embedding.
+	- [ ] Documentar la dependencia opcional de `hdbscan` y su fallback en la guía de instalación.
 	- ~~Soportar modo de ingesta basado en lista blanca.~~
 	- ~~Soportar modo alternativo de ingesta de "todo" con exclusiones explícitas.~~
 	- ~~Permitir lista negra para bloquear extensiones concretas aunque estén permitidas por defecto.~~

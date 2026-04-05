@@ -307,6 +307,14 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                 f"  → extracción={extraction.extraction_method}, partes={len(extraction.chunks)}",
             )
 
+            if not extraction.text and not extraction.chunks:
+                _log(
+                    job_id,
+                    "INFO",
+                    f"[Paso 2/5] Archivo sin texto extraído, omitiendo clasificación/embedding: {fi.path}",
+                )
+                continue
+
             classification_context = build_classification_context(extraction)
             if classification_context:
                 _log(

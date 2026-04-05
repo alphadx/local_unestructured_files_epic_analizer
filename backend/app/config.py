@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # Allowed extensions (whitelist mode): e.g., ".txt,.pdf,.docx,.json,.csv"
     allowed_extensions: str = ""
     # Denied extensions (blacklist mode): e.g., ".exe,.dll,.so,.bin"
-    denied_extensions: str = ".exe,.dll,.so,.dylib,.bin,.app,.msi,.jar,.com,.bat,.cmd"
+    denied_extensions: str = ".exe,.dll,.so,.dylib,.bin,.app,.msi,.jar,.com,.bat,.cmd,.pyc,.pyo"
     # Allowed MIME type prefixes: e.g., "text/,application/pdf,image/"
     allowed_mime_types: str = ""
     # Denied MIME type prefixes: e.g., "application/x-executable,application/x-sharedlib"
