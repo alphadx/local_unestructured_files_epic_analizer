@@ -451,7 +451,7 @@ class TestReportsEndpoint:
                 "enable_pii_detection": False,
                 "enable_embeddings": False,
                 "enable_clustering": False,
-            "group_mode": "strict",
+                "group_mode": "strict",
             },
         )
         assert response.status_code == 202
