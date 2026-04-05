@@ -330,6 +330,14 @@ class ScanRequest(BaseModel):
                 raise ValueError(
                     "Google Drive scan requires a folder_id in source_options or a non-empty path."
                 )
+            service_account = source_options.get("service_account_json")
+            if service_account:
+                try:
+                    json.loads(service_account)
+                except json.JSONDecodeError:
+                    raise ValueError(
+                        "Google Drive service_account_json must be valid JSON."
+                    )
 
         if self.source_provider == SourceProvider.SHAREPOINT:
             site_id = source_options.get("site_id") or settings.sharepoint_site_id

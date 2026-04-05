@@ -82,6 +82,23 @@ class TestJobsEndpoint:
         )
         assert response.status_code == 422
 
+    def test_start_scan_rejects_google_drive_with_invalid_service_account_json(self):
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": "my-folder-id",
+                "source_provider": "google_drive",
+                "source_options": {
+                    "folder_id": "my-folder-id",
+                    "service_account_json": "not-json",
+                },
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert response.status_code == 422
+
     def test_start_scan_rejects_sharepoint_without_site_or_drive(self):
         response = client.post(
             "/api/jobs",

@@ -343,6 +343,8 @@ Ejemplo para Google Drive:
 }
 ```
 
+> Nota: si envías `service_account_json` en `source_options`, debe ser JSON válido.
+
 Ejemplo para SharePoint:
 ```json
 {

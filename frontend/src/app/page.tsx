@@ -62,6 +62,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [searchScope, setSearchScope] = useState<SearchScope>("hybrid");
   const [searchDirectory, setSearchDirectory] = useState("");
@@ -115,23 +116,45 @@ export default function Home() {
   const handleScan = async () => {
     setError(null);
     setFormError(null);
+    setFieldErrors({});
     setReport(null);
     setJob(null);
     resetInsights();
     stopPolling();
 
+    const errors: Record<string, string> = {};
     if (!path.trim()) {
-      setFormError("Debe ingresar una ruta o ID raíz para iniciar el análisis.");
-      return;
+      errors.path = "Debe ingresar una ruta o ID raíz para iniciar el análisis.";
+    }
+
+    if (sourceProvider === "google_drive") {
+      if (!googleDriveFolderId.trim() && !path.trim()) {
+        errors.googleDriveFolderId =
+          "Google Drive requiere un folder_id o un path de carpeta válido.";
+      }
+      if (googleDriveServiceAccountJson.trim()) {
+        try {
+          JSON.parse(googleDriveServiceAccountJson);
+        } catch {
+          errors.googleDriveServiceAccountJson =
+            "El JSON de la cuenta de servicio de Google Drive no es válido.";
+        }
+      }
     }
 
     if (sourceProvider === "sharepoint") {
-      if (!sharepointSiteId.trim() || !sharepointDriveId.trim()) {
-        setFormError(
-          "SharePoint requiere Site ID y Drive ID para escanear el origen remoto."
-        );
-        return;
+      if (!sharepointSiteId.trim()) {
+        errors.sharepointSiteId = "SharePoint requiere un Site ID.";
       }
+      if (!sharepointDriveId.trim()) {
+        errors.sharepointDriveId = "SharePoint requiere un Drive ID.";
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError("Corrige los errores del formulario antes de continuar.");
+      return;
     }
 
     setApiBase(apiUrl.trim() || getApiBase());
@@ -336,6 +359,9 @@ export default function Home() {
                   }
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
+                {fieldErrors.path ? (
+                  <span className="text-sm text-red-700">{fieldErrors.path}</span>
+                ) : null}
               </label>
             </div>
 
@@ -351,6 +377,11 @@ export default function Home() {
                     placeholder="Carpeta raíz de Google Drive"
                     className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
+                  {fieldErrors.googleDriveFolderId ? (
+                    <span className="text-sm text-red-700">
+                      {fieldErrors.googleDriveFolderId}
+                    </span>
+                  ) : null}
                 </label>
                 <label className="flex flex-col gap-2 text-sm text-blue-900">
                   <span>Service Account JSON</span>
@@ -361,6 +392,11 @@ export default function Home() {
                     rows={4}
                     className="min-h-[120px] rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
+                  {fieldErrors.googleDriveServiceAccountJson ? (
+                    <span className="text-sm text-red-700">
+                      {fieldErrors.googleDriveServiceAccountJson}
+                    </span>
+                  ) : null}
                 </label>
               </div>
             ) : null}
@@ -378,6 +414,11 @@ export default function Home() {
                       placeholder="SharePoint site ID"
                       className="rounded-lg border border-green-200 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
+                    {fieldErrors.sharepointSiteId ? (
+                      <span className="text-sm text-red-700">
+                        {fieldErrors.sharepointSiteId}
+                      </span>
+                    ) : null}
                   </label>
                   <label className="flex flex-col gap-2 text-sm text-green-900">
                     <span>Drive ID</span>
@@ -388,6 +429,11 @@ export default function Home() {
                       placeholder="SharePoint drive ID"
                       className="rounded-lg border border-green-200 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
+                    {fieldErrors.sharepointDriveId ? (
+                      <span className="text-sm text-red-700">
+                        {fieldErrors.sharepointDriveId}
+                      </span>
+                    ) : null}
                   </label>
                 </div>
               </div>
