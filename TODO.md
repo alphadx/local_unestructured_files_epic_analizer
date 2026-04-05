@@ -114,6 +114,46 @@
 
 ---
 
+### 5. Persistencia y escalabilidad — PostgreSQL + Celery
+**Status**: ✅ **INVESTIGACIÓN COMPLETADA**  
+**Documento**: [DOCS/avances/009_investigacion_persistencia_escalabilidad.md](DOCS/avances/009_investigacion_persistencia_escalabilidad.md)
+
+**Hallazgos principales**:
+- BD: PostgreSQL (ganador) vs SQLite, MySQL, MongoDB, Redis, Cassandra
+- Task queue: Celery + Redis (recomendado) vs APScheduler, K8s Jobs, SQS+Lambda
+- Schema propuesto: 6 tablas (jobs, documents, entities, clusters, audit_log, search_cache)
+- Escalabilidad: Fase 1 (persistencia) → Fase 2 (paralelismo) → Fase 3 (auto-scaling)
+
+**Arquitectura recomendada** (progressive rollout):
+- **Fase 1** (1-2 sprints): PostgreSQL persistent store, sin cambiar processing
+  - [ ] Schema PostgreSQL: jobs, documents, entities, clusters, audit_log
+  - [ ] Alembic migrations para versionamiento
+  - [ ] SQLAlchemy ORM models
+  - [ ] Reemplazar in-memory store por BD queries
+  - Beneficio: +histórico, +auditoría, +disponibilidad
+
+- **Fase 2** (1-2 sprints): Celery básico, workers por task type
+  - [ ] Redis broker + PostgreSQL result backend
+  - [ ] Tareas: scanning, classification, embedding, clustering
+  - [ ] Job progress endpoint con task status
+  - [ ] Flower monitoring
+  - Beneficio: 2-3x speedup, paralelismo, mejor UX
+  
+- **Fase 3** (2-3 sprints): Auto-scaling, multi-queue, production-ready
+  - [ ] Workers configurables por tipo (queue routing)
+  - [ ] Dead letter queue para tareas fallidas
+  - [ ] Retry logic con backoff exponencial
+  - [ ] Centralizado logging (ELK, DataDog)
+  - [ ] HA setup: PostgreSQL replicas, Redis Sentinel
+  - Beneficio: Escala a 1M+ documentos/mes
+
+**Costo operacional**:
+- Fase 1: +$0 (BD local), +$20-50 (Cloud PostgreSQL)
+- Fase 2: +$100-150 (Redis + compute)
+- Fase 3: $1,250-2,000/mes producción (RDS PostgreSQL + ElastiCache + workers)
+
+---
+
 ## Hoja de ruta de fases
 
 ### ✅ Fase 1 — Núcleo e ingesta (COMPLETADO)

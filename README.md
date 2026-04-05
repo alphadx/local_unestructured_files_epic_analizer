@@ -600,9 +600,37 @@ Documento completo con:
 - [x] **Mapa de calor temporal**: distribución de archivos por fecha de emisión/modificación
 - [x] **Grafo de relaciones**: visualización de conexiones factura ↔ OT ↔ licitación (D3 force-directed graph interactivo)
 
-### Fase 3 — Persistencia y escala
-- [ ] Reemplazar el store en memoria por **PostgreSQL** (estado de jobs y documentos)
-- [ ] Cola de tareas con **Celery + Redis** para procesar corpus grandes en paralelo
+### ✅ Fase 3 — Persistencia y escala — INVESTIGACIÓN COMPLETADA
+
+**Estado**: 🔬 **INVESTIGACIÓN COMPLETADA** — Documento detallado disponible en [DOCS/avances/009_investigacion_persistencia_escalabilidad.md](DOCS/avances/009_investigacion_persistencia_escalabilidad.md)
+
+**Resumen ejecutivo**:
+- PostgreSQL como BD relacional (vs SQLite, MongoDB, etc.)
+- Celery + Redis para task queue y procesamiento paralelo
+- Schema propuesto: 5 tablas (jobs, documents, entities, clusters, audit_log, search_cache)
+- Alternativas analizadas: APScheduler, Kubernetes Jobs, AWS SQS+Lambda
+- **Roadmap de 3 fases**:
+  - **Fase 1** (1-2 sprints): Persistencia PostgreSQL sin cambiar processing
+  - **Fase 2** (1-2 sprints): Celery básico con Redis, 4-6 workers
+  - **Fase 3** (2-3 sprints): Auto-scaling, multi-queue, monitoreo centralizado
+
+**Costo/Beneficio**:
+- Fase 1: $55-80/mes dev, +persistencia e histórico
+- Fase 2: +$100-150 infra, pero 2-3x speedup en classification
+- Fase 3: $1,250-2,000/mes prod, pero escala a 1M+ documentos/mes
+
+Documento completo con:
+- ✅ Comparativa PostgreSQL vs alternativas (MySQL, MongoDB, Redis, Cassandra, DynamoDB)
+- ✅ Schema relacional propuesto con 6 tablas e índices
+- ✅ Celery architecture: brokers (Redis vs RabbitMQ), workers, result backends
+- ✅ Ejemplos de código: task decorators, celery workflow, docker-compose
+- ✅ Alternativas: APScheduler, K8s Jobs, Serverless SQS+Lambda
+- ✅ Comparativa 4 arquitecturas (in-memory vs PG+Celery vs K8s vs Serverless)
+- ✅ Casos de uso: pipeline paralelo, corpus masivos, monitoreo de progreso
+- ✅ Stack recomendado: Docker Compose + Flower
+- ✅ Consideraciones de seguridad, monitoreo, costos
+- ✅ Referencias y tutoriales
+
 - [x] Exportación a CSV / JSON del inventario completo de documentos
 
 ### Fase 4 — Inteligencia aumentada
