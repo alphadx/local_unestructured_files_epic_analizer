@@ -31,6 +31,33 @@
 
 ---
 
+## Integraciones futuras (Post-Phase 3)
+
+### Datashare (ICIJ) — Análisis forense colaborativo
+**Status**: 🔮 Investigación prospectiva  
+**Documento**: [DOCS/avances/010_datashare_integracion_futura.md](DOCS/avances/010_datashare_integracion_futura.md)
+
+**Objetivo**: Integración futura de Epic Analyzer con Datashare para análisis forense e investigación colaborativa en corpus masivos.
+
+**Rationale**:
+- Epic: automatización, clasificación, detección de anomalías
+- Datashare: búsqueda avanzada, grafos, colaboración multiusuario
+- Complementarios, NO competidores
+
+**Roadmap propuesto**:
+- [ ] **Fase 1 (Q4 2026-Q1 2027)**: MVP Export → JSON standardizado
+- [ ] **Fase 2 (Q2 2027)**: UI integration → Botón "Import to Datashare"
+- [ ] **Fase 3 (2027+)**: Message bus → Sincronización bidireccional
+
+**Casos de uso**:
+- Auditoría forense de corpus corporativo
+- Investigación multiusuario de documentos clasificados
+- Análisis de redes de relaciones (personas, organizaciones)
+
+**Beneficio**: Plataforma de unstructured data analysis clase mundial (post-2026 Q3)
+
+---
+
 ## Investigaciones recomendadas
 
 ### 1. Filtrado de contenido para LLM (evitar binarios)
@@ -176,3 +203,31 @@
 
 ### ✅ Fase 6 — Seguridad y cumplimiento (COMPLETADO)
 - API keys, auditoría inmutable, políticas de retención.
+
+---
+
+## Integraciones futuras (Post-Phase 3)
+
+### Datashare (ICIJ) — Análisis forense colaborativo
+
+**Status**: 🔮 Investigación prospectiva  
+**Documento**: [DOCS/avances/010_datashare_integracion_futura.md](DOCS/avances/010_datashare_integracion_futura.md)
+
+**Objetivo**: Integrar Epic Analyzer con Datashare de ICIJ para análisis forense e investigación colaborativa en corpus masivos.
+
+**Rationale**: 
+- Epic: Automatización, clasificación, detección de anomalías
+- Datashare: Búsqueda avanzada, grafos, colaboración multiusuario
+- **Complementarios, NO competidores**
+
+**Roadmap propuesto**:
+- [ ] **Fase 1 (Q4 2026-Q1 2027)**: MVP Export → JSON estándard
+- [ ] **Fase 2 (Q2 2027)**: UI integration → Botón "Import to Datashare"
+- [ ] **Fase 3 (2027+)**: Message bus → Sincronización bidireccional
+
+**Casos de uso**:
+- Auditoría forense de corpus corporativo
+- Investigación multiusuario de documentos clasificados
+- Análisis de redes de relaciones (personas, organizaciones)
+
+**Beneficio**: Plataforma de unstructured data analysis clase mundial (post-2026 Q3)

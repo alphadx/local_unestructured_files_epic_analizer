@@ -644,6 +644,23 @@ Documento completo con:
 - [x] Registro de auditoría inmutable (endpoint `/api/audit`, vista en frontend)
 - [x] Políticas de retención configurables (`MAX_JOBS_RETAINED`, `JOB_MAX_AGE_HOURS`)
 
+### Fase 6 — Integraciones futuras (Post-Phase 3)
+
+**Datashare (ICIJ)** — 🔮 Investigación prospectiva  
+Integración estratégica con plataforma de análisis forense para investigación colaborativa en corpus masivos. Epic proporciona automatización y clasificación; Datashare suma búsqueda avanzada, grafos y múltiples usuarios.
+
+📖 Ver detalles: [010_datashare_integracion_futura.md](DOCS/avances/010_datashare_integracion_futura.md)
+
+**Roadmap** (ETA: 2027 Q1-Q2):
+- Fase 1: MVP Export → JSON estándard
+- Fase 2: UI integration → Botón "Import to Datashare"
+- Fase 3: Message bus → Sincronización bidireccional
+
+**Casos de uso**:
+- Auditoría forense de corpus corporativo
+- Investigación multiusuario de documentos clasificados  
+- Análisis de redes de relaciones (personas, organizaciones)
+
 ---
 
 ## Licencia
