@@ -61,6 +61,7 @@ export default function Home() {
   const [isAsking, setIsAsking] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchScope, setSearchScope] = useState<SearchScope>("hybrid");
   const [searchDirectory, setSearchDirectory] = useState("");
@@ -113,34 +114,45 @@ export default function Home() {
 
   const handleScan = async () => {
     setError(null);
+    setFormError(null);
     setReport(null);
     setJob(null);
     resetInsights();
     stopPolling();
+
+    if (!path.trim()) {
+      setFormError("Debe ingresar una ruta o ID raíz para iniciar el análisis.");
+      return;
+    }
+
+    if (sourceProvider === "sharepoint") {
+      if (!sharepointSiteId.trim() || !sharepointDriveId.trim()) {
+        setFormError(
+          "SharePoint requiere Site ID y Drive ID para escanear el origen remoto."
+        );
+        return;
+      }
+    }
 
     setApiBase(apiUrl.trim() || getApiBase());
 
     try {
       const sourceOptions: Record<string, string> = {};
       if (sourceProvider === "google_drive") {
-        if (googleDriveFolderId) {
-          sourceOptions.folder_id = googleDriveFolderId;
+        if (googleDriveFolderId.trim()) {
+          sourceOptions.folder_id = googleDriveFolderId.trim();
         }
-        if (googleDriveServiceAccountJson) {
-          sourceOptions.service_account_json = googleDriveServiceAccountJson;
+        if (googleDriveServiceAccountJson.trim()) {
+          sourceOptions.service_account_json = googleDriveServiceAccountJson.trim();
         }
       }
       if (sourceProvider === "sharepoint") {
-        if (sharepointSiteId) {
-          sourceOptions.site_id = sharepointSiteId;
-        }
-        if (sharepointDriveId) {
-          sourceOptions.drive_id = sharepointDriveId;
-        }
+        sourceOptions.site_id = sharepointSiteId.trim();
+        sourceOptions.drive_id = sharepointDriveId.trim();
       }
 
       const newJob = await startScan({
-        path,
+        path: path.trim(),
         source_provider: sourceProvider,
         source_options: sourceOptions,
         enable_pii_detection: enablePii,
@@ -390,6 +402,11 @@ export default function Home() {
                 {job?.status === "running" ? "Analizando…" : "Analizar"}
               </button>
             </div>
+            {formError ? (
+              <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+                {formError}
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap gap-5 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">

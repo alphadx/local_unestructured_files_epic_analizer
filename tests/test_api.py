@@ -68,6 +68,34 @@ class TestJobsEndpoint:
         assert get_response.status_code == 200
         assert get_response.json()["job_id"] == job_id
 
+    def test_start_scan_rejects_google_drive_without_folder_id(self):
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": "",
+                "source_provider": "google_drive",
+                "source_options": {},
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert response.status_code == 422
+
+    def test_start_scan_rejects_sharepoint_without_site_or_drive(self):
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": "documents/folder",
+                "source_provider": "sharepoint",
+                "source_options": {},
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert response.status_code == 422
+
 
 class TestReportsEndpoint:
     def test_get_nonexistent_report(self):

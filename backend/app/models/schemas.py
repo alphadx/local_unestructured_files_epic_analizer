@@ -3,7 +3,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from app.config import settings
+from pydantic import BaseModel, Field, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +319,28 @@ class ScanRequest(BaseModel):
     enable_pii_detection: bool = True
     enable_embeddings: bool = True
     enable_clustering: bool = True
+
+    @model_validator(mode="after")
+    def validate_remote_source_options(self) -> "ScanRequest":
+        source_options = {k: str(v).strip() for k, v in self.source_options.items() if v is not None}
+
+        if self.source_provider == SourceProvider.GOOGLE_DRIVE:
+            folder_id = source_options.get("folder_id") or self.path.strip()
+            if not folder_id:
+                raise ValueError(
+                    "Google Drive scan requires a folder_id in source_options or a non-empty path."
+                )
+
+        if self.source_provider == SourceProvider.SHAREPOINT:
+            site_id = source_options.get("site_id") or settings.sharepoint_site_id
+            drive_id = source_options.get("drive_id") or settings.sharepoint_drive_id
+            if not site_id or not drive_id:
+                raise ValueError(
+                    "SharePoint scan requires site_id and drive_id in source_options or environment settings."
+                )
+
+        self.source_options = source_options
+        return self
 
 
 class JobProgress(BaseModel):
