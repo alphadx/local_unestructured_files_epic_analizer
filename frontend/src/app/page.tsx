@@ -96,6 +96,7 @@ export default function Home() {
 
   const loadInsights = useCallback(async (jobId: string) => {
     setIsLoadingInsights(true);
+    setIsLoadingGroups(true);
     try {
       const [stats, exp, groups] = await Promise.all([
         getStatistics(jobId),
@@ -112,6 +113,7 @@ export default function Home() {
       setError(message);
     } finally {
       setIsLoadingInsights(false);
+      setIsLoadingGroups(false);
     }
   }, []);
 

@@ -209,11 +209,13 @@ export default function GroupAnalysis({
 
   const highRiskGroups = analysis.groups.filter((g) => g.health_score < 50);
   const healthyGroups = analysis.groups.filter((g) => g.health_score >= 80);
+  const groupMode = analysis.groups[0]?.group_mode ?? "strict";
+  const similarGroupCount = analysis.group_similarities.length;
 
   return (
     <div className="space-y-6">
       {/* Summary stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-blue-50 rounded-lg p-4">
           <div className="text-3xl font-bold text-blue-900">
             {analysis.group_count}
@@ -228,7 +230,51 @@ export default function GroupAnalysis({
           <div className="text-3xl font-bold text-red-900">{highRiskGroups.length}</div>
           <div className="text-sm text-gray-600">Grupos con riesgo</div>
         </div>
+        <div className="bg-indigo-50 rounded-lg p-4">
+          <div className="text-3xl font-bold text-indigo-900 capitalize">
+            {groupMode}
+          </div>
+          <div className="text-sm text-gray-600">Modo de agrupación</div>
+        </div>
       </div>
+
+      <p className="text-sm text-gray-600">
+        El análisis se realizó en modo <span className="font-semibold">{groupMode}</span>. Si seleccionas
+        <span className="font-semibold"> extended</span>, los grupos incluyen directorios ancestros.
+      </p>
+
+      {similarGroupCount > 0 && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-blue-800">Similitud entre grupos</p>
+              <p className="mt-1 text-2xl font-bold text-blue-900">
+                {similarGroupCount}
+              </p>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+              Top 3 resultados
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {analysis.group_similarities.slice(0, 3).map((sim) => (
+              <div key={`${sim.group_a_id}-${sim.group_b_id}`} className="rounded-lg bg-white p-3 shadow-sm">
+                <div className="text-xs uppercase tracking-wide text-gray-500">
+                  {sim.group_a_path}
+                </div>
+                <div className="mt-1 text-sm font-semibold text-gray-900 truncate">
+                  {sim.group_b_path}
+                </div>
+                <div className="mt-3 text-2xl font-bold text-blue-600">
+                  {Math.round(sim.composite_score * 100)}%
+                </div>
+                <div className="text-xs text-gray-500">{sim.similarity_level}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Groups list */}
       <div>
@@ -243,7 +289,8 @@ export default function GroupAnalysis({
                   disabled={isLoadingSimilarities}
                   className="text-xs text-gray-600 hover:text-gray-900 ml-4 mb-2"
                 >
-                  {selectedGroupId === group.group_id && similarities
+                  {isLoadingSimilarities && selectedGroupId === group.group_id ?
+                    "Cargando..." : selectedGroupId === group.group_id && similarities
                     ? `${similarities.similar_groups.length} grupos similares`
                     : "Ver similares"}
                 </button>
