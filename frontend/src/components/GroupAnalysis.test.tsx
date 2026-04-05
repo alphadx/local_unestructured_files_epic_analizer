@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import GroupAnalysis from "@/components/GroupAnalysis";
-import type { GroupAnalysisResult } from "@/lib/api";
+import type { GroupAnalysisResult, GroupSimilarityResponse } from "@/lib/api";
 
 const mockAnalysis: GroupAnalysisResult = {
   job_id: "job-1",
@@ -101,9 +101,9 @@ describe("GroupAnalysis component", () => {
 
     expect(screen.getByText(/Modo de agrupación/i)).toBeInTheDocument();
     expect(screen.getByText(/Grupos detectados/i)).toBeInTheDocument();
-    expect(screen.getByText("group_001")).toBeInTheDocument();
-    expect(screen.getByText("group_002")).toBeInTheDocument();
-    expect(screen.getByText(/Top 3 grupos similares/i)).toBeInTheDocument();
+    expect(screen.getByText("/data/ventas")).toBeInTheDocument();
+    expect(screen.getByText("/data/operaciones")).toBeInTheDocument();
+    expect(screen.getByText(/Top 3/i)).toBeInTheDocument();
     expect(screen.getByText("Primarily Factura_Proveedor (62%)")).toBeInTheDocument();
   });
 
@@ -111,5 +111,41 @@ describe("GroupAnalysis component", () => {
     render(<GroupAnalysis analysis={null} isLoading={true} />);
 
     expect(screen.getByText(/Analizando grupos de directorios/i)).toBeInTheDocument();
+  });
+
+  it("carga similitudes cuando se hace click en Ver similares", async () => {
+    const mockSimilarities: GroupSimilarityResponse = {
+      job_id: "job-1",
+      group_id: "group_001",
+      group_path: "/data/ventas",
+      similar_groups: [
+        {
+          group_a_id: "group_001",
+          group_b_id: "group_002",
+          group_a_path: "/data/ventas",
+          group_b_path: "/data/operaciones",
+          semantic_similarity: 0.78,
+          category_overlap: 0.25,
+          operational_similarity: 0.8,
+          composite_score: 0.62,
+          similarity_level: "similar",
+          interpretation: "Grupos relacionados por operación y contenido.",
+        },
+      ],
+    };
+
+    const onLoadSimilarities = vi.fn().mockResolvedValue(mockSimilarities);
+
+    render(
+      <GroupAnalysis analysis={mockAnalysis} isLoading={false} onLoadSimilarities={onLoadSimilarities} />
+    );
+
+    const button = screen.getByRole("button", { name: /Ver similares/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(onLoadSimilarities).toHaveBeenCalledWith("group_001");
+      expect(screen.getByText(/Grupos similares a/i)).toBeInTheDocument();
+    });
   });
 });

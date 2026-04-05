@@ -611,8 +611,8 @@ export default function Home() {
                       Análisis de Grupos de Directorio
                     </h2>
                     <p className="mt-2 text-sm text-gray-600 max-w-2xl">
-                      Revisa el perfil de cada carpeta, el modo de agrupación usado y cuáles grupos se parecen más entre sí.
-                      El análisis se actualiza automáticamente cuando el job termina.
+                      Revisa los perfiles de carpetas que se generaron durante el análisis y compara grupos con una vista clara de salud y similitud.
+                      El resultado se mostrará automáticamente cuando termine el job.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -620,7 +620,7 @@ export default function Home() {
                       Grupos: {groupAnalysis?.group_count ?? "—"}
                     </span>
                     <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
-                      Modo: {groupAnalysis?.groups?.[0]?.group_mode ?? "strict"}
+                      Modo: {groupAnalysis?.groups?.[0]?.group_mode ?? groupMode}
                     </span>
                     <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
                       Similitudes: {groupAnalysis?.group_similarities?.length ?? "—"}
@@ -648,6 +648,12 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
+
+                {!groupAnalysis && !isLoadingGroups ? (
+                  <div className="mb-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    El análisis de grupos todavía no está disponible. Espera a que el job termine o revisa que la vectorización y el agrupamiento estén activados en la configuración.
+                  </div>
+                ) : null}
 
                 <GroupAnalysis
                   analysis={groupAnalysis}

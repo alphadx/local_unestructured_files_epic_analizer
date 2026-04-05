@@ -241,6 +241,12 @@ export default function GroupAnalysis({
         <div className="mt-4 text-sm leading-6 text-slate-700">
           {groupModeDescription}
         </div>
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+          <div className="font-semibold text-slate-800">Meta</div>
+          <p className="mt-2 text-sm text-slate-600">
+            Cada grupo de directorio muestra métricas de salud, detección de PII y recomendaciones clave para ayudar a priorizar la reorganización.
+          </p>
+        </div>
       </div>
 
       {/* Summary stats */}
@@ -280,9 +286,12 @@ export default function GroupAnalysis({
               </p>
             </div>
             <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
-              Top 3 grupos similares
+              Top 3
             </span>
           </div>
+          <p className="mt-2 text-sm text-blue-700">
+            Selecciona un grupo para explorar coincidencias semánticas y categóricas entre carpetas.
+          </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {analysis.group_similarities.slice(0, 3).map((sim) => (
