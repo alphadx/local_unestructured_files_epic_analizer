@@ -368,9 +368,45 @@ Ejemplo para SharePoint:
 | `GET` | `/api/audit` | Listar entradas del registro de auditoría (newest first) |
 
 **Parámetros opcionales de `/api/audit`:**
-- `operation` — filtrar por nombre de operación (`job.created`, `job.completed`, `job.failed`, `reorganization.executed`, `search.executed`, `job.pruned`)
+- `operation` — filtrar por nombre de operación (`job.created`, `job.completed`, `job.failed`, `reorganization.executed`, `search.executed`, `job.pruned`, `scan.files_filtered`)
 - `resource_type` — filtrar por tipo de recurso (`job`, `search`)
 - `limit` / `offset` — paginación (máx. 1000)
+
+### Admin
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/api/admin/filter-stats` | Estadísticas de archivos filtrados por reglas de ingesta |
+
+**Parámetros opcionales de `/api/admin/filter-stats`:**
+- `job_id` — filtrar por job específico
+- `limit` — cantidad de registros (default 100, máx 1000)
+- `offset` — paginación (default 0)
+
+**Ejemplo:**
+```bash
+curl http://localhost:8080/api/admin/filter-stats?job_id=abc123&limit=50
+```
+
+**Respuesta:**
+```json
+{
+  "total_scans_with_filters": 5,
+  "total_files_filtered": 247,
+  "scans": [
+    {
+      "job_id": "uuid-123",
+      "timestamp": "2026-04-05T14:30:22Z",
+      "skipped_count": 45,
+      "skipped_files": [
+        {"path": "/path/to/file.exe", "reason": "extension in blacklist: .exe"},
+        {"path": "/path/to/lib.so", "reason": "extension in blacklist: .so"}
+      ],
+      "entry_id": "audit-entry-uuid"
+    }
+  ]
+}
+```
 
 ---
 

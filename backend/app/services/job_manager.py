@@ -205,7 +205,7 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
 
     try:
         # --- Step 1: Fast local indexing ---
-        from app.services.scanner import scan_directory
+        from app.services.scanner import scan_directory_with_stats
 
         loop = asyncio.get_running_loop()
         scan_root = request.path
@@ -217,11 +217,11 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
         _log(job_id, "INFO", f"[Paso 1/5] Escaneando directorio '{scan_root}'…")
         t0 = time.monotonic()
         try:
-            file_indices = await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 loop.run_in_executor(
                     None,
                     partial(
-                        scan_directory,
+                        scan_directory_with_stats,
                         ingestion_mode=settings.ingestion_mode,
                         allowed_extensions=settings.allowed_extensions,
                         denied_extensions=settings.denied_extensions,
@@ -232,6 +232,7 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                 ),
                 timeout=_SCAN_TIMEOUT_SECONDS,
             )
+            file_indices, filter_stats = result
         except asyncio.TimeoutError:
             raise RuntimeError(
                 f"El escaneo de '{request.path}' superó el límite de "
@@ -244,6 +245,24 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                 file_indices,
                 temp_scan_root,
                 request.source_options["_remote_prefix"],
+            )
+
+        # Register filter statistics in audit log
+        if filter_stats.get("filters_applied") and filter_stats.get("skipped_by_filter"):
+            audit_log.record(
+                "scan.files_filtered",
+                actor="system",
+                resource_id=job_id,
+                resource_type="job",
+                outcome="success",
+                skipped_count=len(filter_stats["skipped_by_filter"]),
+                skipped_files=filter_stats["skipped_by_filter"][:10],  # Store first 10 for brevity
+                filters_applied=True,
+            )
+            _log(
+                job_id,
+                "INFO",
+                f"Filtrado aplicado: {len(filter_stats['skipped_by_filter'])} archivo(s) excluido(s) por reglas de ingesta."
             )
 
         job.total_files = len(file_indices)

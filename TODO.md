@@ -22,7 +22,7 @@
 	- Nota: Se realizó consolidación CSS en `frontend/package.json` (removidos `@tailwindcss/postcss` y `autoprefixer` redundantes).
 	- Falta: `npm install` y actualizar Dockerfile para usar `npm ci`.
 - **[NUEVA]** Exponer configuración de filtrado (mime_type, extensiones) en el frontend — selector de modo ingesta + listas configurables en formulario de jobs.
-- **[NUEVA]** Crear endpoint `/api/admin/filter-stats` para auditoría de archivos rechazados durante scans recientes.
+- ~~Crear endpoint `/api/admin/filter-stats` para auditoría de archivos rechazados durante scans recientes.~~ ✅ **COMPLETADO** — Archivo [004_filter_stats_endpoint.md](DOCS/avances/004_filter_stats_endpoint.md) con detalles. Endpoint expone estadísticas de filtrado con consulta por job_id.
 
 ## Prioridad baja: seguimiento y soporte
 

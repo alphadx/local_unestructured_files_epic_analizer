@@ -188,3 +188,138 @@ def scan_directory(
         len(skipped_by_filter),
     )
     return filtered_results
+
+
+def scan_directory_with_stats(
+    root: str | Path,
+    *,
+    ingestion_mode: str = "blacklist",
+    allowed_extensions: str = "",
+    denied_extensions: str = "",
+    allowed_mime_types: str = "",
+    denied_mime_types: str = "",
+) -> tuple[list[FileIndex], dict]:
+    """
+    Walk *root* recursively and return FileIndex list plus filtering statistics.
+
+    Returns:
+        (file_indices, stats_dict)
+
+    Where stats_dict contains:
+        - skipped_by_filter: list of {path, reason}
+        - filters_applied: bool indicating if any filters were active
+    """
+    root = Path(root)
+    logger.info("scan_directory_with_stats: starting scan of '%s'", root)
+
+    if not root.exists():
+        logger.error("scan_directory_with_stats: path does not exist: '%s'", root)
+        raise FileNotFoundError(f"Path does not exist: {root}")
+    if not root.is_dir():
+        logger.error("scan_directory_with_stats: path is not a directory: '%s'", root)
+        raise NotADirectoryError(f"Path is not a directory: {root}")
+
+    seen_hashes: dict[str, str] = {}  # sha256 -> first path
+    results: list[FileIndex] = []
+    skipped_noise = 0
+    skipped_perm = 0
+    skipped_non_regular = 0
+    dirs_visited = 0
+
+    for dirpath, _dirs, filenames in os.walk(root):
+        # Skip hidden directories
+        hidden = [d for d in _dirs if d.startswith(".")]
+        _dirs[:] = [d for d in _dirs if not d.startswith(".")]
+        dirs_visited += 1
+
+        if hidden:
+            logger.debug(
+                "scan_directory_with_stats: skipping %d hidden sub-dir(s) in '%s': %s",
+                len(hidden), dirpath, hidden,
+            )
+        logger.debug(
+            "scan_directory_with_stats: entering '%s' (%d file(s), %d sub-dir(s))",
+            dirpath, len(filenames), len(_dirs),
+        )
+
+        for filename in filenames:
+            file_path = Path(dirpath) / filename
+            if _is_noise(file_path):
+                logger.debug("scan_directory_with_stats: noise skip '%s'", file_path)
+                skipped_noise += 1
+                continue
+            try:
+                st = file_path.stat()
+            except (OSError, PermissionError) as exc:
+                logger.warning("scan_directory_with_stats: cannot stat '%s': %s", file_path, exc)
+                skipped_perm += 1
+                continue
+            if not stat.S_ISREG(st.st_mode):
+                logger.debug("scan_directory_with_stats: non-regular file skip '%s'", file_path)
+                skipped_non_regular += 1
+                continue
+
+            sha = _sha256(file_path)
+            is_dup = sha in seen_hashes and sha != ""
+            dup_of = seen_hashes[sha] if is_dup else None
+            if not is_dup and sha:
+                seen_hashes[sha] = str(file_path)
+
+            if is_dup:
+                logger.debug(
+                    "scan_directory_with_stats: duplicate '%s' (same hash as '%s')",
+                    file_path, dup_of,
+                )
+
+            results.append(
+                FileIndex(
+                    path=str(file_path),
+                    name=filename,
+                    extension=file_path.suffix.lower(),
+                    size_bytes=st.st_size,
+                    created_at=datetime.fromtimestamp(st.st_ctime).isoformat(),
+                    modified_at=datetime.fromtimestamp(st.st_mtime).isoformat(),
+                    sha256=sha,
+                    mime_type=_mime_type(file_path),
+                    is_duplicate=is_dup,
+                    duplicate_of=dup_of,
+                )
+            )
+
+    # Apply MIME type and extension filtering if configured
+    filtered_results = results
+    skipped_by_filter = []
+    filters_applied = bool(
+        ingestion_mode or allowed_extensions or denied_extensions 
+        or allowed_mime_types or denied_mime_types
+    )
+    
+    if filters_applied:
+        filtered_results, skipped_by_filter = filter_file_index_list(
+            results,
+            ingestion_mode=ingestion_mode,
+            allowed_extensions=allowed_extensions,
+            denied_extensions=denied_extensions,
+            allowed_mime_types=allowed_mime_types,
+            denied_mime_types=denied_mime_types,
+        )
+
+    stats = {
+        "skipped_by_filter": skipped_by_filter,
+        "filters_applied": filters_applied,
+    }
+
+    logger.info(
+        "scan_directory_with_stats: finished '%s' — dirs=%d files_indexed=%d "
+        "duplicates=%d skipped_noise=%d skipped_perm=%d skipped_non_regular=%d "
+        "skipped_by_filter=%d",
+        root,
+        dirs_visited,
+        len(results),
+        sum(1 for f in results if f.is_duplicate),
+        skipped_noise,
+        skipped_perm,
+        skipped_non_regular,
+        len(skipped_by_filter),
+    )
+    return filtered_results, stats

@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import audit, jobs, rag, reports, reorganize, search
+from app.routers import admin, audit, jobs, rag, reports, reorganize, search
 
 logging.basicConfig(
     level=settings.log_level,
@@ -67,6 +67,7 @@ app.include_router(rag.router)
 app.include_router(search.router)
 app.include_router(reorganize.router)
 app.include_router(audit.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")
