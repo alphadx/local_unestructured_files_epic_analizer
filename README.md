@@ -325,7 +325,8 @@ La documentación interactiva completa está disponible en `http://localhost:808
   "source_options": {},
   "enable_pii_detection": true,
   "enable_embeddings": true,
-  "enable_clustering": true
+  "enable_clustering": true,
+  "group_mode": "strict"
 }
 ```
 
@@ -339,7 +340,8 @@ Ejemplo para Google Drive:
   },
   "enable_pii_detection": true,
   "enable_embeddings": true,
-  "enable_clustering": true
+  "enable_clustering": true,
+  "group_mode": "extended"
 }
 ```
 
@@ -356,7 +358,8 @@ Ejemplo para SharePoint:
   },
   "enable_pii_detection": true,
   "enable_embeddings": true,
-  "enable_clustering": true
+  "enable_clustering": true,
+  "group_mode": "extended"
 }
 ```
 
@@ -462,6 +465,8 @@ Sin esta capa de indexación no es posible construir una representación consist
 Un **grupo** será una unidad derivada de estructura de árbol, con dos modos:
 - **Modo estricto**: un grupo = un directorio (sin subdirectorios)
 - **Modo extendido**: un grupo = un directorio + subárbol (incluye descendientes)
+
+El modo de agrupación se puede controlar enviando `group_mode` en el payload de `POST /api/jobs`.
 
 Cada grupo tendrá un `group_profile` con features agregadas:
 - Distribución de categorías documentales (ej.: facturas, contratos, licitaciones)

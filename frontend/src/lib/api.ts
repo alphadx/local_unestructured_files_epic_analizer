@@ -42,6 +42,7 @@ export interface ScanRequest {
   enable_pii_detection: boolean;
   enable_embeddings: boolean;
   enable_clustering: boolean;
+  group_mode: GroupMode;
 }
 
 export interface ClusterItem {

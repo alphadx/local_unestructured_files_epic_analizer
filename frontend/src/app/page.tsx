@@ -11,6 +11,7 @@ import type {
   RagQueryResponse,
   SearchResponse,
   SearchScope,
+  GroupMode,
 } from "@/lib/api";
 import {
   executeReorganization,
@@ -41,6 +42,7 @@ export default function Home() {
   const [enablePii, setEnablePii] = useState(true);
   const [enableEmbed, setEnableEmbed] = useState(true);
   const [enableCluster, setEnableCluster] = useState(true);
+  const [groupMode, setGroupMode] = useState<GroupMode>("strict");
   const [sourceProvider, setSourceProvider] = useState<"local" | "google_drive" | "sharepoint">("local");
   const [googleDriveFolderId, setGoogleDriveFolderId] = useState("");
   const [googleDriveServiceAccountJson, setGoogleDriveServiceAccountJson] = useState("");
@@ -210,6 +212,7 @@ export default function Home() {
         enable_pii_detection: enablePii,
         enable_embeddings: enableEmbed,
         enable_clustering: enableCluster,
+        group_mode: groupMode,
       });
       setJob(newJob);
 
@@ -492,6 +495,20 @@ export default function Home() {
                 {formError}
               </div>
             ) : null}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-2 text-sm text-gray-700">
+                <span>Modo de agrupación</span>
+                <select
+                  value={groupMode}
+                  onChange={(e) => setGroupMode(e.target.value as GroupMode)}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="strict">Strict (solo directorio inmediato)</option>
+                  <option value="extended">Extended (directorio + ancestros)</option>
+                </select>
+              </label>
+            </div>
 
             <div className="flex flex-wrap gap-5 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
