@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     scan_concurrency: int = 4
     log_level: str = "INFO"
 
+    # Security — API key auth (leave empty to disable)
+    api_key: str = ""
+
+    # Retention — automatic job pruning
+    max_jobs_retained: int = 0  # 0 = unlimited
+    job_max_age_hours: int = 0  # 0 = unlimited
+
     # Remote source integrations
     google_drive_service_account_json: dict[str, Any] = Field(default_factory=dict)
     google_drive_folder_id: str = ""

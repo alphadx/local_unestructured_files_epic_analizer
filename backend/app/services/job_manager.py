@@ -35,6 +35,7 @@ from app.services.source_service import (
     prepare_scan_source,
     rewrite_remote_paths,
 )
+from app.services import audit_log
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,8 @@ _job_logs: dict[str, list[str]] = {}
 _log_subscribers: dict[str, list[asyncio.Queue[str]]] = defaultdict(list)
 # job_id -> GroupAnalysisResult (once completed)
 _group_analysis: dict[str, GroupAnalysisResult] = {}
+# job_id -> epoch creation time (for retention pruning)
+_job_creation_times: dict[str, float] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +68,13 @@ def create_job() -> str:
     job_id = str(uuid.uuid4())
     _jobs[job_id] = JobProgress(job_id=job_id, status=JobStatus.PENDING)
     _job_logs[job_id] = []
+    _job_creation_times[job_id] = time.time()
+    audit_log.record(
+        "job.created",
+        resource_id=job_id,
+        resource_type="job",
+        outcome="started",
+    )
     return job_id
 
 
@@ -114,6 +124,61 @@ def unsubscribe_job_logs(job_id: str, queue: asyncio.Queue[str]) -> None:
 
 def list_jobs() -> list[JobProgress]:
     return list(_jobs.values())
+
+
+def prune_old_jobs() -> int:
+    """Remove jobs exceeding retention limits. Returns count of pruned jobs."""
+    if not settings.max_jobs_retained and not settings.job_max_age_hours:
+        return 0
+
+    now = time.time()
+    completed_ids = [
+        jid for jid, j in _jobs.items()
+        if j.status in (JobStatus.COMPLETED, JobStatus.FAILED)
+    ]
+
+    to_remove: set[str] = set()
+
+    # Age-based pruning
+    if settings.job_max_age_hours > 0:
+        max_age_secs = settings.job_max_age_hours * 3600
+        for jid in completed_ids:
+            logs = _job_logs.get(jid, [])
+            if logs:
+                # Rough heuristic: first log entry carries HH:MM:SS, not epoch.
+                # We track creation via _job_creation_times below.
+                pass
+        # Use a creation-time map populated in create_job
+        for jid in completed_ids:
+            created = _job_creation_times.get(jid, now)
+            if (now - created) > max_age_secs:
+                to_remove.add(jid)
+
+    # Count-based pruning (keep the N most recent)
+    if settings.max_jobs_retained > 0:
+        remaining = [jid for jid in completed_ids if jid not in to_remove]
+        # Sort by creation time, oldest first
+        remaining.sort(key=lambda jid: _job_creation_times.get(jid, 0))
+        excess = len(remaining) - settings.max_jobs_retained
+        if excess > 0:
+            to_remove.update(remaining[:excess])
+
+    for jid in to_remove:
+        _jobs.pop(jid, None)
+        _reports.pop(jid, None)
+        _documents.pop(jid, None)
+        _chunks.pop(jid, None)
+        _job_logs.pop(jid, None)
+        _group_analysis.pop(jid, None)
+        _job_creation_times.pop(jid, None)
+        audit_log.record(
+            "job.pruned",
+            resource_id=jid,
+            resource_type="job",
+            outcome="success",
+        )
+
+    return len(to_remove)
 
 
 def _log(job_id: str, level: str, msg: str) -> None:
@@ -340,6 +405,14 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
         job.status = JobStatus.COMPLETED
         job.message = "Análisis completado."
         _log(job_id, "INFO", f"[Paso 6/6] Job {job_id} completado exitosamente ✓")
+        audit_log.record(
+            "job.completed",
+            resource_id=job_id,
+            resource_type="job",
+            path=request.path,
+            source_provider=request.source_provider.value,
+            total_files=job.total_files,
+        )
 
     except Exception as exc:  # noqa: BLE001
         _log(job_id, "ERROR", f"Job {job_id} falló: {exc!r}")
@@ -347,6 +420,13 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
         job.status = JobStatus.FAILED
         job.error = repr(exc)
         job.message = "Error durante el análisis."
+        audit_log.record(
+            "job.failed",
+            resource_id=job_id,
+            resource_type="job",
+            outcome="failure",
+            error=repr(exc),
+        )
     finally:
         if temp_scan_root:
             cleanup_source_path(temp_scan_root)

@@ -301,6 +301,9 @@ docker run -p 8001:8000 chromadb/chroma:0.5.0
 | `SHAREPOINT_CLIENT_SECRET` | `""` | Client secret de la aplicación de Azure AD |
 | `SHAREPOINT_SITE_ID` | `""` | Site ID de SharePoint que contiene el drive |
 | `SHAREPOINT_DRIVE_ID` | `""` | Drive ID de SharePoint para el scan remoto |
+| `API_KEY` | `""` | Clave de autenticación de la API (si se configura, todos los endpoints requieren header `X-Api-Key`) |
+| `MAX_JOBS_RETAINED` | `0` | Máximo de jobs completados en memoria (`0` = sin límite) |
+| `JOB_MAX_AGE_HOURS` | `0` | Eliminar jobs más antiguos de N horas (`0` = sin límite) |
 
 ---
 
@@ -316,6 +319,7 @@ La documentación interactiva completa está disponible en `http://localhost:808
 | `GET` | `/api/jobs` | Listar todos los jobs |
 | `GET` | `/api/jobs/{job_id}` | Estado de un job |
 | `GET` | `/api/jobs/{job_id}/logs` | Log en tiempo real del pipeline |
+| `POST` | `/api/jobs/prune` | Purgar jobs antiguos según política de retención |
 
 **Body de `POST /api/jobs`:**
 ```json
@@ -396,6 +400,17 @@ Ejemplo para SharePoint:
 | `POST` | `/api/reorganize/{job_id}/execute` | Ejecutar el plan de reorganización (mueve archivos) |
 
 > ⚠️ **Seguridad:** el escaneo es siempre de **sólo lectura**. La reorganización sólo ejecuta cuando el usuario invoca explícitamente el endpoint o hace clic en el botón del dashboard.
+
+### Auditoría
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/api/audit` | Listar entradas del registro de auditoría (newest first) |
+
+**Parámetros opcionales de `/api/audit`:**
+- `operation` — filtrar por nombre de operación (`job.created`, `job.completed`, `job.failed`, `reorganization.executed`, `search.executed`, `job.pruned`)
+- `resource_type` — filtrar por tipo de recurso (`job`, `search`)
+- `limit` / `offset` — paginación (máx. 1000)
 
 ---
 
@@ -580,9 +595,9 @@ Con esta métrica podremos:
   - documentar el comportamiento para que el sistema no intente clasificar archivos binarios con Gemini
 
 ### Fase 2 — Análisis avanzado
-- [ ] **Estadísticas de distribución**: breakdown por extensión, categoría y nivel de riesgo PII
-- [ ] **Mapa de calor temporal**: distribución de archivos por fecha de emisión/modificación
-- [ ] **Grafo de relaciones**: visualización de conexiones factura ↔ OT ↔ licitación
+- [x] **Estadísticas de distribución**: breakdown por extensión, categoría y nivel de riesgo PII
+- [x] **Mapa de calor temporal**: distribución de archivos por fecha de emisión/modificación
+- [x] **Grafo de relaciones**: visualización de conexiones factura ↔ OT ↔ licitación (D3 force-directed graph interactivo)
 
 ### Fase 3 — Persistencia y escala
 - [ ] Reemplazar el store en memoria por **PostgreSQL** (estado de jobs y documentos)
@@ -593,12 +608,12 @@ Con esta métrica podremos:
 - [x] **Búsqueda semántica**: consultas en lenguaje natural sobre el corpus (`/api/search`)
 - [x] **Comparación entre scans**: detectar archivos nuevos/modificados/eliminados
 - [x] **Resumen ejecutivo**: generación de reporte PDF con Gemini
-- [ ] Soporte para **SharePoint** y **Google Drive** como fuente de datos
+- [x] Soporte para **SharePoint** y **Google Drive** como fuente de datos
 
 ### Fase 5 — Seguridad y cumplimiento
-- [ ] Autenticación con API keys o OAuth2
-- [ ] Registro de auditoría inmutable (quién ejecutó qué reorganización)
-- [ ] Políticas de retención configurables
+- [x] Autenticación con API keys (`API_KEY` env var + header `X-Api-Key`)
+- [x] Registro de auditoría inmutable (endpoint `/api/audit`, vista en frontend)
+- [x] Políticas de retención configurables (`MAX_JOBS_RETAINED`, `JOB_MAX_AGE_HOURS`)
 
 ---
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from app.services import job_manager
+from app.services import audit_log, job_manager
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,15 @@ async def execute_reorganization(job_id: str) -> dict:
             # Log the full exception server-side; return a safe generic message
             logger.error("Failed to move %s to %s: %s", src, dst, exc)
             errors.append({"path": str(src), "error": "File move operation failed"})
+
+    audit_log.record(
+        "reorganization.executed",
+        resource_id=job_id,
+        resource_type="job",
+        outcome="success" if not errors else "failure",
+        moved=len(moved),
+        errors=len(errors),
+    )
 
     return {
         "job_id": job_id,

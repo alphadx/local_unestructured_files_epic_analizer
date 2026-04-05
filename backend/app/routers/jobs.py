@@ -64,3 +64,15 @@ async def job_log_websocket(job_id: str, websocket: WebSocket) -> None:
         pass
     finally:
         job_manager.unsubscribe_job_logs(job_id, queue)
+
+
+@router.post("/prune", status_code=200)
+async def prune_jobs() -> dict:
+    """
+    Manually trigger job pruning based on the configured retention policy.
+
+    Removes completed/failed jobs that exceed ``max_jobs_retained`` or
+    ``job_max_age_hours`` settings. Returns the number of jobs pruned.
+    """
+    pruned = job_manager.prune_old_jobs()
+    return {"pruned": pruned}

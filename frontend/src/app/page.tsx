@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  AuditEntry,
+  AuditLogResponse,
   CorpusExplorationReport,
   DataHealthReport,
   GroupAnalysisResult,
@@ -16,21 +18,26 @@ import type {
 import {
   executeReorganization,
   getApiBase,
+  getAuditLog,
   getExploration,
   getGroups,
   getGroupSimilarities,
   getJob,
   getReport,
   getStatistics,
+  pruneJobs,
   queryRag,
   searchCorpus,
   setApiBase,
+  setApiKey,
   startScan,
 } from "@/lib/api";
 import ClusterMap from "@/components/ClusterMap";
 import GroupAnalysis from "@/components/GroupAnalysis";
 import HealthReport from "@/components/HealthReport";
 import JobStatusCard from "@/components/JobStatusCard";
+import RelationGraph from "@/components/RelationGraph";
+import StatisticsCharts from "@/components/StatisticsCharts";
 
 const POLL_INTERVAL_MS = 2_000;
 
@@ -39,6 +46,7 @@ type Tab = "dashboard" | "clusters" | "groups" | "audit" | "exploration" | "sear
 export default function Home() {
   const [path, setPath] = useState("");
   const [apiUrl, setApiUrl] = useState(getApiBase());
+  const [apiKey, setApiKeyState] = useState("");
   const [enablePii, setEnablePii] = useState(true);
   const [enableEmbed, setEnableEmbed] = useState(true);
   const [enableCluster, setEnableCluster] = useState(true);
@@ -72,6 +80,9 @@ export default function Home() {
   const [searchExtension, setSearchExtension] = useState("");
   const [ragQuery, setRagQuery] = useState("");
   const [ragIncludeAnswer, setRagIncludeAnswer] = useState(true);
+  const [auditLog, setAuditLog] = useState<AuditLogResponse | null>(null);
+  const [isLoadingAudit, setIsLoadingAudit] = useState(false);
+  const [isPruning, setIsPruning] = useState(false);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -191,6 +202,7 @@ export default function Home() {
     }
 
     setApiBase(apiUrl.trim() || getApiBase());
+    setApiKey(apiKey.trim());
 
     try {
       const sourceOptions: Record<string, string> = {};
@@ -370,6 +382,17 @@ export default function Home() {
                   value={apiUrl}
                   onChange={(e) => setApiUrl(e.target.value)}
                   placeholder="http://localhost:8080"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-gray-700">
+                <span>API Key <span className="font-normal text-gray-400">(opcional — dejar vacío si no está configurada)</span></span>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKeyState(e.target.value)}
+                  placeholder="sk-..."
+                  autoComplete="off"
                   className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </label>
@@ -596,6 +619,9 @@ export default function Home() {
                   onExecuteReorg={handleExecuteReorg}
                   isExecuting={isExecuting}
                 />
+                {statistics && (
+                  <StatisticsCharts statistics={statistics} />
+                )}
               </div>
             )}
 
@@ -672,46 +698,105 @@ export default function Home() {
             )}
 
             {activeTab === "audit" && (
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h2 className="mb-4 text-lg font-semibold text-gray-800">
-                  Vista de Auditoría
-                </h2>
-                <div className="space-y-4">
-                  {report.clusters.map((c) => (
-                    <div
-                      key={c.cluster_id}
-                      className="rounded-lg border border-gray-100 p-4"
+              <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-800">Registro de Auditoría</h2>
+                    <p className="text-sm text-gray-500">Historial inmutable de operaciones del sistema</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        setIsLoadingAudit(true);
+                        try {
+                          const log = await getAuditLog({ limit: 200 });
+                          setAuditLog(log);
+                        } catch {
+                          // ignore
+                        } finally {
+                          setIsLoadingAudit(false);
+                        }
+                      }}
+                      disabled={isLoadingAudit}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                     >
-                      <div className="mb-2 flex items-center justify-between">
-                        <h3 className="font-medium text-gray-700">
-                          {c.label.replace(/_/g, " ")}
-                        </h3>
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
-                          {c.document_count} docs
-                        </span>
-                      </div>
-                      {c.inconsistencies.length > 0 && (
-                        <ul className="mb-2 text-xs text-red-500">
-                          {c.inconsistencies.map((e, i) => (
-                            <li key={i}>⚠ {e}</li>
-                          ))}
-                        </ul>
-                      )}
-                      <ul className="space-y-0.5 text-xs text-gray-500">
-                        {c.documents.slice(0, 5).map((d) => (
-                          <li key={d.documento_id} className="truncate">
-                            📄 {d.path}
-                          </li>
-                        ))}
-                        {c.documents.length > 5 && (
-                          <li className="text-gray-400">
-                            … y {c.documents.length - 5} más
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  ))}
+                      {isLoadingAudit ? "Cargando…" : "Actualizar log"}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setIsPruning(true);
+                        try {
+                          const result = await pruneJobs();
+                          alert(`${result.pruned} job(s) purgados según la política de retención.`);
+                        } catch {
+                          alert("Error al purgar jobs.");
+                        } finally {
+                          setIsPruning(false);
+                        }
+                      }}
+                      disabled={isPruning}
+                      className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {isPruning ? "Purgando…" : "Purgar jobs antiguos"}
+                    </button>
+                  </div>
                 </div>
+
+                {!auditLog && (
+                  <div className="flex h-32 items-center justify-center text-gray-400 text-sm">
+                    Haz clic en "Actualizar log" para cargar el registro de auditoría.
+                  </div>
+                )}
+
+                {auditLog && (
+                  <>
+                    <p className="text-xs text-gray-500">
+                      {auditLog.total} entradas en total · mostrando {auditLog.entries.length}
+                    </p>
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600">Timestamp</th>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600">Operación</th>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600">Recurso</th>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600">Resultado</th>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600">Detalles</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {auditLog.entries.map((entry: AuditEntry) => (
+                            <tr key={entry.entry_id} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{entry.timestamp}</td>
+                              <td className="px-3 py-2 font-mono text-gray-800">{entry.operation}</td>
+                              <td className="px-3 py-2 text-gray-600 truncate max-w-[200px]">
+                                {entry.resource_id ? (
+                                  <span title={entry.resource_id}>{entry.resource_id.slice(0, 8)}…</span>
+                                ) : "—"}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  entry.outcome === "success"
+                                    ? "bg-green-100 text-green-700"
+                                    : entry.outcome === "failure"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-blue-100 text-blue-700"
+                                }`}>
+                                  {entry.outcome}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-gray-500 max-w-[300px] truncate">
+                                {Object.entries(entry.details)
+                                  .map(([k, v]) => `${k}: ${v}`)
+                                  .join(" · ")}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -831,31 +916,9 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div>
+                  <div className="lg:col-span-2">
                     <h3 className="mb-3 font-semibold text-gray-800">Grafo de relaciones</h3>
-                    <div className="rounded-lg border border-gray-100 p-3 text-sm">
-                      <div className="mb-3 flex items-center justify-between">
-                        <span className="font-medium text-gray-700">Nodos</span>
-                        <span className="text-gray-500">{exploration.relation_graph.node_count}</span>
-                      </div>
-                      <div className="mb-3 flex items-center justify-between">
-                        <span className="font-medium text-gray-700">Relaciones</span>
-                        <span className="text-gray-500">{exploration.relation_graph.edge_count}</span>
-                      </div>
-                      {exploration.relation_graph.edges.slice(0, 5).map((edge, index) => (
-                        <div key={index} className="mb-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-600">
-                          <div className="font-medium text-gray-800">
-                            {edge.source} → {edge.target}
-                          </div>
-                          <div>
-                            {edge.relation_type} · {edge.count} vez{edge.count === 1 ? "" : "es"}
-                          </div>
-                        </div>
-                      ))}
-                      {exploration.relation_graph.edges.length === 0 && (
-                        <div className="text-gray-500">No se detectaron relaciones semánticas.</div>
-                      )}
-                    </div>
+                    <RelationGraph graph={exploration.relation_graph} />
                   </div>
                 </div>
               </div>

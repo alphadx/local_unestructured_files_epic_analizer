@@ -18,6 +18,14 @@ export function getApiBase(): string {
   return api.defaults.baseURL as string;
 }
 
+export function setApiKey(key: string) {
+  if (key) {
+    api.defaults.headers.common["X-Api-Key"] = key;
+  } else {
+    delete api.defaults.headers.common["X-Api-Key"];
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Types (mirrors backend Pydantic schemas)
 // ---------------------------------------------------------------------------
@@ -400,5 +408,42 @@ export async function getGroupSimilarities(
   const { data } = await api.get<GroupSimilarityResponse>(
     `/api/reports/${jobId}/groups/${groupId}/similarity`
   );
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
+export interface AuditEntry {
+  entry_id: string;
+  timestamp: string;
+  operation: string;
+  actor: string;
+  resource_id: string | null;
+  resource_type: string | null;
+  outcome: string;
+  details: Record<string, unknown>;
+}
+
+export interface AuditLogResponse {
+  total: number;
+  offset: number;
+  limit: number;
+  entries: AuditEntry[];
+}
+
+export async function getAuditLog(params?: {
+  operation?: string;
+  resource_type?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<AuditLogResponse> {
+  const { data } = await api.get<AuditLogResponse>("/api/audit", { params });
+  return data;
+}
+
+export async function pruneJobs(): Promise<{ pruned: number }> {
+  const { data } = await api.post<{ pruned: number }>("/api/jobs/prune");
   return data;
 }
