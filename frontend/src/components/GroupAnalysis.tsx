@@ -218,22 +218,29 @@ export default function GroupAnalysis({
   const similarGroupCount = analysis.group_similarities.length;
   const groupModeDescription =
     groupMode === "strict"
-      ? "Cada archivo pertenece sólo a su carpeta padre inmediata."
-      : "Cada archivo también se agrega a sus directorios ancestro como grupos adicionales.";
+      ? "Cada archivo se asigna sólo a su carpeta padre inmediata."
+      : "Cada archivo se agrega también a sus directorios ancestro como grupos adicionales.";
+
+  const groupModeBadgeClass =
+    groupMode === "strict"
+      ? "bg-sky-100 text-sky-800"
+      : "bg-emerald-100 text-emerald-800";
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <span className="font-semibold">Modo de agrupación:</span>
-            <span className="ml-2 font-bold">{groupMode}</span>
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Modo de agrupación</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">{groupMode === "strict" ? "Strict" : "Extended"}</h2>
           </div>
-          <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${groupModeBadgeClass}`}>
             {groupMode === "strict" ? "Strict" : "Extended"}
           </span>
         </div>
-        <div className="mt-3 text-gray-700">{groupModeDescription}</div>
+        <div className="mt-4 text-sm leading-6 text-slate-700">
+          {groupModeDescription}
+        </div>
       </div>
 
       {/* Summary stats */}
@@ -273,7 +280,7 @@ export default function GroupAnalysis({
               </p>
             </div>
             <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
-              Top 3 resultados
+              Top 3 grupos similares
             </span>
           </div>
 

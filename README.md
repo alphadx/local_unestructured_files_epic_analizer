@@ -532,6 +532,10 @@ Con esta métrica podremos:
 - Implementar un diccionario de checksums (sha256) por archivo:
   - usar el hash del archivo para saltar procesamiento redundante.
   - aprovechar cálculos previos de clasificación, PII y metadata cuando el checksum ya existe.
+- Investigar asincronía y paralelización para las llamadas HTTP / API:
+  - evaluar qué partes del pipeline pueden hacerse `async`/concurrentes.
+  - revisar `POST /api/jobs`, comunicación con Gemini/ChromaDB y carga de análisis en paralelo.
+  - considerar suites de tareas en paralelo como `asyncio`, `concurrent.futures`, `ray`, `prefect` o `dagster`.
 
 > Criterio de aceptación propuesto: estos items quedan como investigación y definición de requisitos para futuras iteraciones.
 
