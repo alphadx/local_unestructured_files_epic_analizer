@@ -36,7 +36,7 @@ El sistema toma una ruta de directorio (local o montada) y ejecuta un pipeline d
 | 2 | `gemini_service` | Clasificación semántica con **Gemini Flash**: categoría, entidades, relaciones, palabras clave |
 | 3 | `embeddings_service` | Vectorización con **models/text-multilingual-embedding-002** → almacenamiento en ChromaDB |
 | 4 | `clustering_service` | Agrupación por similitud con **HDBSCAN** (o fallback a etiqueta Gemini) |
-| 5 | `job_manager` | Reporte de salud de datos: duplicados, PII, inconsistencias, plan de reorganización |
+| 5 | `job_manager` | Reporte de salud de datos y análisis de directorios: perfiles de carpeta, similitud de grupos, alertas y recomendaciones |
 
 El usuario puede revisar el reporte en el dashboard Next.js y — sólo si lo aprueba — ejecutar la reorganización de archivos con un click.
 
