@@ -120,6 +120,13 @@ External:  Google Gemini API (Flash + text-embedding-004)
 
 ## Funcionalidades
 
+### Actualización reciente
+- Implementación de navegación por familias de clusters en el dashboard.
+- Mapa de burbujas de clusters con selección de familia y cluster individual.
+- Backend mejorado de clustering con `AgglomerativeClustering` para subagrupaciones más estables.
+- Extensión de la API de reportes con exploración de corpus y metadatos de grupo.
+- Corrección de build frontend para producción y tipado de D3/TypeScript.
+
 ### Indexado de archivos (sin IA)
 - Escaneo recursivo completo, sin límite de profundidad
 - Omite automáticamente archivos de ruido: `.tmp`, `.exe`, `.dll`, `~$*`, `.DS_Store`, etc.
@@ -216,6 +223,12 @@ Una vez levantado:
 | Backend API | http://localhost:8080 |
 | Swagger UI | http://localhost:8080/docs |
 | ChromaDB | http://localhost:8001 |
+
+### Docker images
+- `local_unestructured_files_epic_analizer-backend`: backend FastAPI
+- `local_unestructured_files_epic_analizer-frontend`: frontend Next.js
+
+Puedes verificar las imágenes locales con `docker images | grep local_unestructured_files_epic_analizer`
 
 ### Uso en Codespaces / GitHub.dev
 
@@ -341,6 +354,32 @@ La documentación interactiva completa está disponible en `http://localhost:808
 
 ---
 
+## Ejemplo rápido de uso
+
+### Crear un nuevo job
+```bash
+curl -X POST http://localhost:8080/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "/data/scan",
+    "enable_pii_detection": true,
+    "enable_embeddings": true,
+    "enable_clustering": true
+  }'
+```
+
+### Consultar el reporte final
+```bash
+curl http://localhost:8080/api/reports/<job_id>
+```
+
+### Buscar clusters y exploración de corpus
+```bash
+curl http://localhost:8080/api/reports/<job_id>/exploration
+```
+
+---
+
 ## Testing
 
 ```bash
@@ -439,6 +478,30 @@ Con esta métrica podremos:
 ---
 
 ## Hoja de ruta
+
+### Investigación recomendada — ranking moderno
+- Analizar alternativas open source a BM25 para este tipo de corpus híbrido de chunks y vectores.
+- Investigar sistemas como:
+  - `elasticsearch` / `OpenSearch` con BM25 + hybrid vector search
+  - `pgvector` + SQL + texto completo
+  - `Weaviate`, `Milvus`, `Vespa` para búsquedas semánticas híbridas
+  - `LanceDB` o `Chroma` con ranking por proximidad de embeddings y metadata filters
+- Objetivo: definir una etapa futura de ranking híbrido que combine:
+  1. Relevancia textual (BM25 / exact match)
+  2. Semántica vectorial (coseno / distancia euclidiana)
+  3. Señales de confianza del modelo y calidad de metadatos
+- Esta investigación debe incluir ejemplos concretos de repositorios open source y benchmarks ligeros.
+
+### Investigación recomendada — NER y contactos
+- El backend actual ya extrae campos estructurados para documentos contables:
+  - `emisor`, `receptor`, `monto_total`, `moneda`
+- No hay un reconocimiento de entidades nombradas generalizado ni una base de datos de contactos aún.
+- Tarea propuesta:
+  - añadir `named_entities` o `contact_records` en `DocumentMetadata`
+  - extender el prompt de Gemini para devolver NER adicionales (personas, organizaciones, RUTs, emails, teléfonos, direcciones)
+  - exponer un endpoint o export con los contactos detectados
+  - construir un dashboard/tabla de entidades encontradas y su frecuencia
+- Esto permitirá crear una capa de datos de personas/empresas extraídas del corpus que puede usarse para búsquedas, auditorías y cruces posteriores.
 
 ### Fase 2 — Análisis avanzado
 - [ ] **Estadísticas de distribución**: breakdown por extensión, categoría y nivel de riesgo PII
