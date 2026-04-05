@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+import time
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
@@ -51,6 +52,48 @@ class TestJobsEndpoint:
         data = response.json()
         assert "job_id" in data
         assert data["status"] in ("pending", "running", "completed")
+
+    def test_start_scan_e2e_pipeline_applies_filters(self, tmp_path):
+        (tmp_path / "allowed.txt").write_text("hello")
+        (tmp_path / "denied.py").write_text("print('nope')")
+        (tmp_path / "included.md").write_text("markdown content")
+
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+                "group_mode": "strict",
+                "ingestion_mode": "blacklist",
+                "denied_extensions": ".py",
+            },
+        )
+        assert response.status_code == 202
+
+        job_id = response.json()["job_id"]
+        deadline = time.time() + 15
+        final_status = None
+
+        while time.time() < deadline:
+            status_resp = client.get(f"/api/jobs/{job_id}")
+            assert status_resp.status_code == 200
+            job_data = status_resp.json()
+            if job_data["status"] in ("completed", "failed"):
+                final_status = job_data["status"]
+                break
+            time.sleep(0.2)
+
+        assert final_status == "completed", f"Job {job_id} did not complete in time"
+        assert job_data["total_files"] == 2
+
+        stats_resp = client.get(f"/api/reports/{job_id}/statistics")
+        assert stats_resp.status_code == 200
+        stats_data = stats_resp.json()
+        assert stats_data["job_id"] == job_id
+        assert ".py" not in stats_data["extension_breakdown"]
+        assert stats_data["total_files"] == 2
 
     def test_start_scan_passes_filter_overrides_to_pipeline(self, tmp_path, monkeypatch):
         captured: dict[str, object] = {}
