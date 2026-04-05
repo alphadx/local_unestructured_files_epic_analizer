@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const DEFAULT_API = "http://localhost:8080";
+const DEFAULT_API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 // Priority: build-time env var -> runtime window override (window.__API_BASE__) -> default
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" ? (window as any).__API_BASE__ : undefined) || DEFAULT_API;
 

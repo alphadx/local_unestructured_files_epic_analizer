@@ -107,6 +107,10 @@ export default function Home() {
     return () => stopPolling();
   }, [stopPolling]);
 
+  useEffect(() => {
+    setApiBase(apiUrl.trim() || getApiBase());
+  }, [apiUrl]);
+
   const resetInsights = useCallback(() => {
     setStatistics(null);
     setExploration(null);
@@ -391,7 +395,10 @@ export default function Home() {
                 <input
                   type="text"
                   value={apiUrl}
-                  onChange={(e) => setApiUrl(e.target.value)}
+                  onChange={(e) => {
+                    setApiUrl(e.target.value);
+                    setApiBase(e.target.value.trim() || getApiBase());
+                  }}
                   placeholder="http://localhost:8080"
                   className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
@@ -517,7 +524,7 @@ export default function Home() {
               </div>
             ) : null}
 
-            <FilterConfiguration onConfigChange={setFilterOverrides} />
+            <FilterConfiguration key={apiUrl} onConfigChange={setFilterOverrides} />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <button
