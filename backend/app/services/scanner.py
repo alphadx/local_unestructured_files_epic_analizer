@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover
     _MAGIC_AVAILABLE = False
 
 from app.models.schemas import FileIndex
+from app.services.mime_filter import filter_file_index_list
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,15 @@ def _mime_type(path: Path) -> str | None:
         return None
 
 
-def scan_directory(root: str | Path) -> list[FileIndex]:
+def scan_directory(
+    root: str | Path,
+    *,
+    ingestion_mode: str = "blacklist",
+    allowed_extensions: str = "",
+    denied_extensions: str = "",
+    allowed_mime_types: str = "",
+    denied_mime_types: str = "",
+) -> list[FileIndex]:
     """
     Walk *root* recursively and return a FileIndex for every non-noise file.
 
@@ -152,9 +161,23 @@ def scan_directory(root: str | Path) -> list[FileIndex]:
                 )
             )
 
+    # Apply MIME type and extension filtering if configured
+    filtered_results = results
+    skipped_by_filter = []
+    if ingestion_mode or allowed_extensions or denied_extensions or allowed_mime_types or denied_mime_types:
+        filtered_results, skipped_by_filter = filter_file_index_list(
+            results,
+            ingestion_mode=ingestion_mode,
+            allowed_extensions=allowed_extensions,
+            denied_extensions=denied_extensions,
+            allowed_mime_types=allowed_mime_types,
+            denied_mime_types=denied_mime_types,
+        )
+
     logger.info(
         "scan_directory: finished '%s' — dirs=%d files_indexed=%d "
-        "duplicates=%d skipped_noise=%d skipped_perm=%d skipped_non_regular=%d",
+        "duplicates=%d skipped_noise=%d skipped_perm=%d skipped_non_regular=%d "
+        "skipped_by_filter=%d",
         root,
         dirs_visited,
         len(results),
@@ -162,5 +185,6 @@ def scan_directory(root: str | Path) -> list[FileIndex]:
         skipped_noise,
         skipped_perm,
         skipped_non_regular,
+        len(skipped_by_filter),
     )
-    return results
+    return filtered_results

@@ -5,13 +5,13 @@
 - Definir e implementar ranking híbrido para búsqueda documental.
 	- Evaluar BM25 como capa textual principal.
 	- Combinar BM25 con señales vectoriales y metadatos cuando aplique.
-- Añadir filtrado por `mime_type` antes de enviar contenido al LLM.
-	- Evitar clasificar binarios, ejecutables o archivos no textuales.
-	- Mantener la decisión de filtrado cerca del scanner o del extractor.
-- Introducir listas configurables de extensiones permitidas y denegadas.
-	- Soportar modo de ingesta basado en lista blanca.
-	- Soportar modo alternativo de ingesta de "todo" con exclusiones explícitas.
-	- Permitir lista negra para bloquear extensiones concretas aunque estén permitidas por defecto.
+- ~~Añadir filtrado por `mime_type` antes de enviar contenido al LLM.~~ **✅ COMPLETADO** — Archivo [003_mime_type_filtering.md](DOCS/avances/003_mime_type_filtering.md) con detalles. Sistema configurable con modos `whitelist`/`blacklist`.
+	- ~~Evitar clasificar binarios, ejecutables o archivos no textuales.~~
+	- ~~Mantener la decisión de filtrado cerca del scanner o del extractor.~~
+- ~~Introducir listas configurables de extensiones permitidas y denegadas.~~ **✅ COMPLETADO** — Variables en `.env`: `INGESTION_MODE`, `ALLOWED_EXTENSIONS`, `DENIED_EXTENSIONS`, `ALLOWED_MIME_TYPES`, `DENIED_MIME_TYPES`.
+	- ~~Soportar modo de ingesta basado en lista blanca.~~
+	- ~~Soportar modo alternativo de ingesta de "todo" con exclusiones explícitas.~~
+	- ~~Permitir lista negra para bloquear extensiones concretas aunque estén permitidas por defecto.~~
 
 ## Prioridad media: documentación de API y fuentes
 
@@ -19,6 +19,10 @@
 - ~~Añadir un ejemplo de uso del websocket de logs en `/api/jobs/{job_id}/logs/ws`.~~ ✅ **COMPLETADO** — Sección 3 en [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) con ejemplos en Python, JavaScript, Bash y flujo completo.
 - ~~Documentar las integraciones remotas de origen: Google Drive y SharePoint.~~ ✅ **COMPLETADO** — Sección 4 en [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) con guías de configuración de credenciales, ejemplos de request/response, flujos Python y bash para ambos proveedores.
 - Regenerar `frontend/package-lock.json` y consolidar el stack CSS para volver a `npm ci` en la imagen Docker.
+	- Nota: Se realizó consolidación CSS en `frontend/package.json` (removidos `@tailwindcss/postcss` y `autoprefixer` redundantes).
+	- Falta: `npm install` y actualizar Dockerfile para usar `npm ci`.
+- **[NUEVA]** Exponer configuración de filtrado (mime_type, extensiones) en el frontend — selector de modo ingesta + listas configurables en formulario de jobs.
+- **[NUEVA]** Crear endpoint `/api/admin/filter-stats` para auditoría de archivos rechazados durante scans recientes.
 
 ## Prioridad baja: seguimiento y soporte
 

@@ -240,6 +240,11 @@ docker run -p 8001:8000 chromadb/chroma:0.5.0
 | `VECTOR_STORE_ALLOW_RESET` | `true` | Permite reiniciar la colección desde el backend |
 | `MAX_FILE_SIZE_MB` | `10` | Tamaño máximo por archivo antes de truncar |
 | `SCAN_CONCURRENCY` | `4` | Hilos para el escáner |
+| `INGESTION_MODE` | `blacklist` | Modo de ingesta: `blacklist` (deniega extensiones/MIME listados) u `whitelist` (solo permite los listados) |
+| `ALLOWED_EXTENSIONS` | `""` | Extensiones permitidas en modo `whitelist`; ej: `.txt,.pdf,.docx` (se ignora en modo `blacklist`) |
+| `DENIED_EXTENSIONS` | `.exe,.dll,.so,.dylib,.bin,.app,.msi,.jar,.com,.bat,.cmd` | Extensiones denegadas en modo `blacklist`; formato: `.ext1,.ext2` |
+| `ALLOWED_MIME_TYPES` | `""` | Prefijos de MIME types permitidos en modo `whitelist`; ej: `text/,image/,application/pdf` |
+| `DENIED_MIME_TYPES` | `application/x-executable,application/x-sharedlib,application/x-dvi,application/x-java-applet` | Prefijos de MIME types denegados en modo `blacklist`; formato: `application/x-*` |
 | `LOG_LEVEL` | `INFO` | Nivel de log (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `CORS_ORIGINS` | `http://localhost:3000` | Orígenes CORS permitidos (lista JSON o `false` para `*`) |
 | `SCAN_PATH` | `/tmp/fiasco_test` | Ruta del host a montar en el contenedor backend |

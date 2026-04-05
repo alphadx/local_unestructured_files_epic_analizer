@@ -218,7 +218,18 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
         t0 = time.monotonic()
         try:
             file_indices = await asyncio.wait_for(
-                loop.run_in_executor(None, scan_directory, scan_root),
+                loop.run_in_executor(
+                    None,
+                    partial(
+                        scan_directory,
+                        ingestion_mode=settings.ingestion_mode,
+                        allowed_extensions=settings.allowed_extensions,
+                        denied_extensions=settings.denied_extensions,
+                        allowed_mime_types=settings.allowed_mime_types,
+                        denied_mime_types=settings.denied_mime_types,
+                    ),
+                    scan_root,
+                ),
                 timeout=_SCAN_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
