@@ -71,25 +71,22 @@
 ---
 
 ### 3. Ranking moderno — alternativas a BM25
-**Objetivo**: Definir estándar híbrido para búsquedas que combine relevancia textual, semántica y metadatos.
+**Status**: ✅ **INVESTIGACIÓN COMPLETADA**  
+**Documento**: [DOCS/avances/007_investigacion_ranking_moderno.md](DOCS/avances/007_investigacion_ranking_moderno.md)
 
-**Tareas**:
-- [ ] Investigar alternativas open source:
-  - `elasticsearch` / `OpenSearch` (BM25 + hybrid vector search)
-  - `pgvector` + SQL + full-text search
-  - `Weaviate`, `Milvus`, `Vespa` (búsquedas semánticas híbridas)
-  - `LanceDB` o `Chroma` (ranking por proximidad de embeddings + metadata filters)
-- [ ] Crear documento de comparación: matriz de criterios (latencia, escalabilidad, mantenibilidad, costo).
-- [ ] Proponer implementación piloto con la alternativa seleccionada.
-- [ ] Definir fórmula de scoring híbrido en nueva sección del README:
-  - 1. Relevancia textual (BM25 / exact match)
-  - 2. Semántica vectorial (coseno / distancia euclidiana)
-  - 3. Señales de confianza y calidad (metadata, PII risk, duplicates)
+**Hallazgos principales**:
+- Técnicas: BM25 (léxica) + Embeddings (densa) + Learning to Rank (aprendida)
+- Soluciones evaluadas: Elasticsearch, Weaviate, Milvus, Vespa, LanceDB
+- **Recomendación arquitectónica**:
+  - [ ] **Fase 1 (corto plazo)**: Implementar RRF (Reciprocal Rank Fusion) para hybrid search — combinar BM25 + dense retrieval
+  - [ ] **Fase 2 (mediano plazo)**: Migrar a Elasticsearch híbrido si corpus > 1M docs
+  - [ ] **Fase 3 (largo plazo)**: Learning to Rank con LambdaMART si datos de relevancia disponibles
 
-**Beneficios**:
-- Búsquedas más precisas y relevantes.
-- Preparar el sistema para escala (millones de documentos).
-- Reducir dependencia única de ChromaDB.
+**Próximos pasos de implementación**:
+- [ ] Benchmark local: latencia BM25 vs embeddings vs RRF (corpus 1k-10k docs)
+- [ ] PoC Elasticsearch (opcional, si presupuesto permite)
+- [ ] Análisis de costos: almacenamiento + compute + operacional
+- [ ] Decisión final basada en feedback de usuarios y benchmarks
 
 ---
 

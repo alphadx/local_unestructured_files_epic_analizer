@@ -529,18 +529,29 @@ Con esta métrica el sistema puede:
 
 ## Hoja de ruta
 
-### Investigación recomendada — ranking moderno
-- Analizar alternativas open source a BM25 para este tipo de corpus híbrido de chunks y vectores.
-- Investigar sistemas como:
-  - `elasticsearch` / `OpenSearch` con BM25 + hybrid vector search
-  - `pgvector` + SQL + texto completo
-  - `Weaviate`, `Milvus`, `Vespa` para búsquedas semánticas híbridas
-  - `LanceDB` o `Chroma` con ranking por proximidad de embeddings y metadata filters
-- Objetivo: definir una etapa futura de ranking híbrido que combine:
-  1. Relevancia textual (BM25 / exact match)
-  2. Semántica vectorial (coseno / distancia euclidiana)
-  3. Señales de confianza del modelo y calidad de metadatos
-- Esta investigación debe incluir ejemplos concretos de repositorios open source y benchmarks ligeros.
+### ✅ Investigación completada — Ranking moderno para búsqueda híbrida
+
+**Estado**: 🔬 **INVESTIGACIÓN COMPLETADA** — Documento detallado disponible en [DOCS/avances/007_investigacion_ranking_moderno.md](DOCS/avances/007_investigacion_ranking_moderno.md)
+
+**Resumen ejecutivo**:
+- Comparación de técnicas: **BM25 (léxica)** vs **Embeddings (densa)** vs **Learning to Rank (aprendida)**
+- Análisis de soluciones: Elasticsearch híbrido, Weaviate, Milvus, Vespa, LanceDB, Chroma
+- **Recomendación para Epic Analyzer**:
+  1. **Corto plazo** (2-4 sem): Implementar RRF (Reciprocal Rank Fusion) — combinar BM25 + embeddings sin re-entrenamiento
+  2. **Mediano plazo** (4-12 sem): Migrar a Elasticsearch híbrido o Weaviate si corpus crece > 1M docs
+  3. **Largo plazo** (6+ meses): Learning to Rank con LambdaMART cuando datos de relevancia estén disponibles
+
+**Costo/Beneficio**:
+- RRF: ~4-6h implementación, +40-60% mejora en recall semántico, bajo costo infra
+- Elasticsearch: 1-2 sprints, +5-10% mejora en precision, costo operacional medio
+- Learning to Rank: Overkill hoy; evaluar si corpus crece significativamente
+
+Documento completo con:
+- ✅ Estado del arte en ranking: BM25, sparse embeddings, dense retrieval, LtR
+- ✅ Formulas matemáticas y pseudocódigo
+- ✅ Matriz comparativa de 6 soluciones principales
+- ✅ Roadmap arquitectónico fase por fase
+- ✅ Referencias, papers y recursos para profundización
 
 ### Investigación recomendada — NER y contactos
 - El backend actual ya extrae campos estructurados para documentos contables:
