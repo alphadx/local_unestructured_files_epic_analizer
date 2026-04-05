@@ -230,8 +230,8 @@ docker run -p 8001:8000 chromadb/chroma:0.5.0
 | Variable | Por defecto | Descripción |
 |----------|-------------|-------------|
 | `GEMINI_API_KEY` | `""` | API key de Google AI Studio ([obtener aquí](https://aistudio.google.com/apikey)) |
-| `GEMINI_FLASH_MODEL` | `gemini-2.5-flash-lite` | Modelo de clasificación |
-| `GEMINI_EMBEDDING_MODEL` | `models/text-multilingual-embedding-002` | Modelo de embeddings |
+| `GEMINI_FLASH_MODEL` | `gemini-2.5-flash-lite` | Modelo Gemini usado para clasificación, extracción y análisis semántico de documentos |
+| `GEMINI_EMBEDDING_MODEL` | `models/text-multilingual-embedding-002` | Modelo Gemini usado para generar embeddings vectoriales y habilitar búsqueda semántica |
 | `CHROMA_HOST` | `chromadb` | Host de ChromaDB |
 | `CHROMA_PORT` | `8000` | Puerto de ChromaDB |
 | `CHROMA_COLLECTION` | `documents` | Nombre de la colección |
@@ -248,6 +248,8 @@ docker run -p 8001:8000 chromadb/chroma:0.5.0
 | `DENIED_MIME_TYPES` | `application/x-executable,application/x-sharedlib,application/x-dvi,application/x-java-applet` | Prefijos de MIME types denegados en modo `blacklist`; formato: `application/x-*` |
 
 > **📝 Nota**: Los valores de `INGESTION_MODE`, `ALLOWED_EXTENSIONS`, `DENIED_EXTENSIONS`, `ALLOWED_MIME_TYPES` y `DENIED_MIME_TYPES` se pueden personalizar **por job** desde el componente `FilterConfiguration` en el formulario del frontend, sin necesidad de reiniciar el backend.
+>
+> **🧠 Nota Gemini**: `GEMINI_FLASH_MODEL` y `GEMINI_EMBEDDING_MODEL` cumplen funciones distintas y no son intercambiables. El primero clasifica y resume contenido; el segundo convierte texto en vectores para búsqueda y clustering.
 | `LOG_LEVEL` | `INFO` | Nivel de log (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `CORS_ORIGINS` | `http://localhost:3000` | Orígenes CORS permitidos (lista JSON o `false` para `*`) |
 | `SCAN_PATH` | `/tmp/fiasco_test` | Ruta del host a montar en el contenedor backend |
