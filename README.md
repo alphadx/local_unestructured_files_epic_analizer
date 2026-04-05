@@ -553,16 +553,35 @@ Documento completo con:
 - ✅ Roadmap arquitectónico fase por fase
 - ✅ Referencias, papers y recursos para profundización
 
-### Investigación recomendada — NER y contactos
-- El backend actual ya extrae campos estructurados para documentos contables:
-  - `emisor`, `receptor`, `monto_total`, `moneda`
-- No hay un reconocimiento de entidades nombradas generalizado ni una base de datos de contactos aún.
-- Tarea propuesta:
-  - añadir `named_entities` o `contact_records` en `DocumentMetadata`
-  - extender el prompt de Gemini para devolver NER adicionales (personas, organizaciones, RUTs, emails, teléfonos, direcciones)
-  - exponer un endpoint o export con los contactos detectados
-  - construir un dashboard/tabla de entidades encontradas y su frecuencia
-- Esto permitirá crear una capa de datos de personas/empresas extraídas del corpus que puede usarse para búsquedas, auditorías y cruces posteriores.
+### ✅ Investigación completada — NER (Named Entity Recognition) y extracción de contactos
+
+**Estado**: 🔬 **INVESTIGACIÓN COMPLETADA** — Documento detallado disponible en [DOCS/avances/008_investigacion_ner_contactos.md](DOCS/avances/008_investigacion_ner_contactos.md)
+
+**Resumen ejecutivo**:
+- Técnicas modernas: CRF (clásico) → BiLSTM-CRF (deep learning) → BERT (sota 2018-2024) → LLMs (Gemini, GPT)
+- Comparativa de soluciones: spaCy, HuggingFace Transformers, Gemini, Azure API
+- **Recomendación para Epic Analyzer**:
+  - **Fase 1 (inmediato, 4-6h)**: Extender Gemini Flash con tipos de entidades (PERSON, ORG, EMAIL, PHONE, DATE, MONEY) + regex para normalización
+  - **Fase 2 (mediano, 1-2 sprints)**: Integrar spaCy local para extracción rápida + base de datos de contactos
+  - **Fase 3 (futuro)**: Entity linking a conocimiento externo (CRM, Knowledge Graph)
+
+**Estrategia arquitectónica** (Hybrid 3-Layer):
+1. Regex patterns → Email, RUT, teléfono (100% precisión, 0ms)
+2. spaCy local → PER, ORG, LOC rápido (10-50ms, sin GPU)
+3. Gemini para contexto complejo → Desambiguación, campos custom (1-3s)
+
+**Costo/Beneficio**:
+- Fase 1: Negligible (tokens Gemini ya usados), +30-50% en recall de contactos
+- Fase 2: ~$200/mes GPU (opcional), -60% latencia, +mejor precisión
+- ROI: Baja-media prioridad; puede combinarse con ranking o filtrado de binarios
+
+Documento completo con:
+- ✅ Historia de NER: CRF, BiLSTM-CRF, BERT, LLMs
+- ✅ Técnicas especializadas: Few-shot, Entity Linking, Relational NER
+- ✅ Comparativa 5 soluciones (spaCy, BERT, Gemini, Azure, OpenAI)
+- ✅ Casos de uso específicos para documentos contables
+- ✅ Roadmap de implementación con 3 fases
+- ✅ Referencias, datasets, tutoriales
 
 ### Investigación recomendada — filtrado de contenido para LLM
 - Evitar enviar binarios al LLM es clave: no tiene valor para clasificación/texto y es una pérdida de tiempo.

@@ -90,6 +90,30 @@
 
 ---
 
+### 4. NER (Named Entity Recognition) y extracción de contactos
+**Status**: ✅ **INVESTIGACIÓN COMPLETADA**  
+**Documento**: [DOCS/avances/008_investigacion_ner_contactos.md](DOCS/avances/008_investigacion_ner_contactos.md)
+
+**Hallazgos principales**:
+- Técnicas: CRF clásico → BiLSTM-CRF → BERT-based → LLM-based (Gemini, GPT)
+- Soluciones evaluadas: spaCy, HuggingFace Transformers, Gemini, Azure API, OpenAI
+- **Estrategia híbrida recomendada** (3 capas):
+  - Layer 1: Regex para email, RUT, teléfono (precisión 100%, sin costo compute)
+  - Layer 2: spaCy local para PER/ORG/LOC (10-50ms, CPU-friendly)
+  - Layer 3: Gemini para contexto complejo, entidades ambiguas, custom types
+
+**Implementación recomendada**:
+- [ ] **Fase 1 (inmediato, 4-6h)**: Extender Gemini con tipos NER + schema DocumentMetadata + endpoint contacts
+- [ ] **Fase 2 (mediano, 1-2 sprints)**: Integrar spaCy + base de datos de contactos si PostgreSQL se implementa
+- [ ] **Fase 3 (futuro)**: Entity linking a externa knowledge graphs (CRM, DBpedia)
+
+**Costo/Beneficio**:
+- Fase 1: Negligible (tokens Gemini existentes), +30-50% recall de contactos
+- Fase 2: ~$200/mes GPU (opcional para acelerar), -60% latencia
+- Prioridad: Baja-media (puede combinarse con otras investigaciones)
+
+---
+
 ## Hoja de ruta de fases
 
 ### ✅ Fase 1 — Núcleo e ingesta (COMPLETADO)
