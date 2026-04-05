@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     chroma_host: str = "chromadb"
     chroma_port: int = 8000
     vector_store_ssl: bool = False
-    vector_store_headers: dict[str, str] = {}
+    vector_store_headers: str | dict[str, str] = Field(default_factory=dict)
     chroma_collection: str = "documents"
     vector_store_allow_reset: bool = True
 

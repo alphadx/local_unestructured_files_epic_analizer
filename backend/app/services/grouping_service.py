@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import math
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import numpy as np
@@ -577,7 +577,7 @@ def create_group_profile(
         job_id=job_id,
         group_path=group_path,
         group_mode=mode,
-        created_at=datetime.utcnow().isoformat(),
+        created_at=datetime.now(timezone.utc).isoformat(),
         features=features,
         inferred_purpose=inferred_purpose,
         health_score=health_score,
@@ -641,5 +641,5 @@ def analyze_all_groups(
         total_groups_analyzed=len(profiles),
         groups=profiles,
         group_similarities=top_similarities,
-        analysis_timestamp=datetime.utcnow().isoformat(),
+        analysis_timestamp=datetime.now(timezone.utc).isoformat(),
     )
