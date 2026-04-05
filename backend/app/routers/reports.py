@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app.models.schemas import (
@@ -11,8 +11,10 @@ from app.models.schemas import (
     GroupAnalysisResult,
     GroupSimilarityResponse,
     JobStatistics,
+    ScanComparisonResponse,
 )
 from app.services.analytics_service import build_corpus_exploration, build_job_statistics
+from app.services.compare_service import compare_scans
 from app.services.export_service import documents_to_csv, documents_to_json_payload
 from app.services import job_manager
 
@@ -180,4 +182,40 @@ async def export_documents_csv(job_id: str) -> PlainTextResponse:
         content=csv_content,
         media_type="text/csv",
         headers=headers,
+    )
+
+
+@router.get("/{base_job_id}/compare/{target_job_id}", response_model=ScanComparisonResponse)
+async def compare_job_scans(
+    base_job_id: str,
+    target_job_id: str,
+    include_unchanged: bool = Query(
+        default=False,
+        description="Include unchanged files in response.",
+    ),
+    limit: int = Query(
+        default=200,
+        ge=1,
+        le=2000,
+        description="Maximum number of items returned per change bucket.",
+    ),
+) -> ScanComparisonResponse:
+    """Compare two completed scans and detect new/modified/deleted files."""
+    if job_manager.get_job(base_job_id) is None:
+        raise HTTPException(status_code=404, detail=f"Base job {base_job_id} not found")
+    if job_manager.get_job(target_job_id) is None:
+        raise HTTPException(
+            status_code=404, detail=f"Target job {target_job_id} not found"
+        )
+
+    base_documents = job_manager.get_documents(base_job_id)
+    target_documents = job_manager.get_documents(target_job_id)
+
+    return compare_scans(
+        base_job_id=base_job_id,
+        target_job_id=target_job_id,
+        base_documents=base_documents,
+        target_documents=target_documents,
+        include_unchanged=include_unchanged,
+        limit=limit,
     )

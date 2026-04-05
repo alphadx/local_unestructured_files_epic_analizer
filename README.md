@@ -329,6 +329,7 @@ La documentación interactiva completa está disponible en `http://localhost:808
 | `GET` | `/api/reports/{job_id}/chunks` | Fragmentos semánticos extraídos |
 | `GET` | `/api/reports/{job_id}/export/json` | Exportar inventario completo en JSON |
 | `GET` | `/api/reports/{job_id}/export/csv` | Exportar inventario completo en CSV |
+| `GET` | `/api/reports/{base_job_id}/compare/{target_job_id}` | Comparar scans: nuevos/modificados/eliminados |
 | `GET` | `/api/reports/{job_id}/statistics` | Estadísticas de distribución (extensiones, categorías, PII) |
 | `GET` | `/api/reports/{job_id}/exploration` | Exploración de corpus: carpetas, temas, ruido y concentración |
 
@@ -515,7 +516,7 @@ Con esta métrica podremos:
 
 ### Fase 4 — Inteligencia aumentada
 - [ ] **Búsqueda semántica**: consultas en lenguaje natural sobre el corpus (`/api/search`)
-- [ ] **Comparación entre scans**: detectar archivos nuevos/modificados/eliminados
+- [x] **Comparación entre scans**: detectar archivos nuevos/modificados/eliminados
 - [ ] **Resumen ejecutivo**: generación de reporte PDF con Gemini
 - [ ] Soporte para **SharePoint** y **Google Drive** como fuente de datos
 

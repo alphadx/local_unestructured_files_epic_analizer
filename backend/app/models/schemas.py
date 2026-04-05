@@ -459,6 +459,41 @@ class SearchResponse(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
 
 
+class ScanChangeType(str, Enum):
+    NEW = "new"
+    MODIFIED = "modified"
+    DELETED = "deleted"
+    UNCHANGED = "unchanged"
+
+
+class ScanDeltaItem(BaseModel):
+    path: str
+    change_type: ScanChangeType
+    base_sha256: str | None = None
+    target_sha256: str | None = None
+    base_documento_id: str | None = None
+    target_documento_id: str | None = None
+
+
+class ScanComparisonSummary(BaseModel):
+    new_files: int = 0
+    modified_files: int = 0
+    deleted_files: int = 0
+    unchanged_files: int = 0
+
+
+class ScanComparisonResponse(BaseModel):
+    base_job_id: str
+    target_job_id: str
+    base_total_documents: int
+    target_total_documents: int
+    summary: ScanComparisonSummary
+    new_files: list[ScanDeltaItem] = Field(default_factory=list)
+    modified_files: list[ScanDeltaItem] = Field(default_factory=list)
+    deleted_files: list[ScanDeltaItem] = Field(default_factory=list)
+    unchanged_files: list[ScanDeltaItem] = Field(default_factory=list)
+
+
 class JobStatistics(BaseModel):
     """Detailed distribution statistics derived from a completed analysis job."""
 

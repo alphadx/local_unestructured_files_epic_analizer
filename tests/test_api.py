@@ -196,6 +196,103 @@ class TestReportsEndpoint:
         assert "documento_id,path,name,extension" in body
         assert "exportable.md" in body
 
+    def test_compare_scans_detects_new_modified_deleted(self, tmp_path):
+        file_a = tmp_path / "a.txt"
+        file_b = tmp_path / "b.txt"
+        file_a.write_text("v1", encoding="utf-8")
+        file_b.write_text("to-delete", encoding="utf-8")
+
+        base_response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert base_response.status_code == 202
+        base_job_id = base_response.json()["job_id"]
+
+        file_a.write_text("v2", encoding="utf-8")
+        file_b.unlink()
+        (tmp_path / "c.txt").write_text("new-file", encoding="utf-8")
+
+        target_response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert target_response.status_code == 202
+        target_job_id = target_response.json()["job_id"]
+
+        comparison_response = client.get(
+            f"/api/reports/{base_job_id}/compare/{target_job_id}"
+        )
+        assert comparison_response.status_code == 200
+        payload = comparison_response.json()
+
+        assert payload["summary"]["new_files"] == 1
+        assert payload["summary"]["modified_files"] == 1
+        assert payload["summary"]["deleted_files"] == 1
+
+        assert any(item["path"].endswith("/c.txt") for item in payload["new_files"])
+        assert any(
+            item["path"].endswith("/a.txt") for item in payload["modified_files"]
+        )
+        assert any(
+            item["path"].endswith("/b.txt") for item in payload["deleted_files"]
+        )
+
+    def test_compare_scans_include_unchanged_and_limit(self, tmp_path):
+        (tmp_path / "stable.txt").write_text("same", encoding="utf-8")
+        (tmp_path / "changing.txt").write_text("before", encoding="utf-8")
+
+        base_response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert base_response.status_code == 202
+        base_job_id = base_response.json()["job_id"]
+
+        (tmp_path / "changing.txt").write_text("after", encoding="utf-8")
+
+        target_response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+            },
+        )
+        assert target_response.status_code == 202
+        target_job_id = target_response.json()["job_id"]
+
+        comparison_response = client.get(
+            f"/api/reports/{base_job_id}/compare/{target_job_id}"
+            "?include_unchanged=true&limit=1"
+        )
+        assert comparison_response.status_code == 200
+        payload = comparison_response.json()
+
+        assert payload["summary"]["unchanged_files"] >= 1
+        assert payload["summary"]["modified_files"] == 1
+        assert len(payload["unchanged_files"]) == 1
+
+    def test_compare_scans_nonexistent_job(self):
+        response = client.get("/api/reports/does-not-exist/compare/other-job")
+        assert response.status_code == 404
+
 
 class TestRagEndpoint:
     def test_rag_query_endpoint(self, monkeypatch):
