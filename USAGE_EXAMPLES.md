@@ -873,6 +873,186 @@ asyncio.run(monitor_sp_scan(job_id))
 
 ---
 
+## 5. Configuración de Filtrado de Ingesta
+
+### Descripción
+
+Epic Analyzer ofrece dos estrategias configurables para decidir qué archivos procesar durante el escaneo:
+
+- **Modo `blacklist`** (por defecto): Procesa TODO excepto lo explícitamente excluido
+- **Modo `whitelist`**: Procesa SOLO lo explícitamente permitido
+
+Además, detecta y salta automáticamente binarios (ejecutables, imágenes, vídeos, comprimidos) sin intentar extracción.
+
+### Escenario A: Modo Whitelist (Solo Documentos Corporativos)
+
+**Caso de uso**: Auditoría de corpus corporativo. Solo interesa procesar documentos de negocio.
+
+**Request**:
+```bash
+curl -X POST http://localhost:8000/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "/data/corporate",
+    "source_provider": "local",
+    "ingestion_mode": "whitelist",
+    "allowed_extensions": [".pdf", ".docx", ".xlsx", ".csv"],
+    "allowed_mime_types": ["text/", "application/pdf", "application/msword", "application/vnd"],
+    "enable_embeddings": true,
+    "enable_clustering": true,
+    "enable_pii_detection": true
+  }'
+```
+
+**Resultado**:
+- ✅ Procesa: PDF, Word, Excel, CSV, TXT, JSON, XML
+- ❌ Rechaza: Imágenes, vídeos, ejecutables, comprimidos
+- 📊 Auditoría: Ver `/api/admin/filter-stats?job_id=<JOB_ID>`
+
+**Response**:
+```json
+{
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "accepted"
+}
+```
+
+### Escenario B: Modo Blacklist (Repositorio Abierto)
+
+**Caso de uso**: Análisis de GitHub/GitLab. Puede haber de todo, pero queremos evitar ejecutables y comprimidos.
+
+**Request**:
+```bash
+curl -X POST http://localhost:8000/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "/data/github-repos",
+    "source_provider": "local",
+    "ingestion_mode": "blacklist",
+    "denied_extensions": [".exe", ".dll", ".so", ".dylib", ".zip", ".tar", ".gz", ".rar", ".7z"],
+    "denied_mime_types": ["application/x-executable", "application/x-sharedlib", "application/zip", "application/gzip"],
+    "enable_embeddings": true,
+    "enable_clustering": false
+  }'
+```
+
+**Resultado**:
+- ✅ Procesa: `.py`, `.js`, `.ts`, `.md`, `.json`, `.yaml`, `.xml`, `.txt`, etc.
+- ❌ Rechaza: Ejecutables, comprimidos
+- 📊 Auditoría: Ver `/api/admin/filter-stats`
+
+**Response**:
+```json
+{
+  "job_id": "660f9511-f40c-52e5-b827-557766551111",
+  "status": "accepted"
+}
+```
+
+### Escenario C: Deteción Temprana Automática de Binarios
+
+**Características**:
+- Opera independientemente del modo (blacklist o whitelist)
+- Detecta por extensión: `.jpg`, `.png`, `.gif`, `.mp4`, `.mp3`, etc.
+- Detecta por MIME type: `image/*`, `video/*`, `audio/*`, `application/octet-stream`, etc.
+- **Beneficio**: No intenta extraer contenido (ahorra tiempo, evita errores)
+
+**Ejemplo: Request Sin Configuración Explícita**:
+```bash
+curl -X POST http://localhost:8000/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "/data/mixed",
+    "source_provider": "local",
+    "enable_embeddings": true
+  }'
+```
+
+En este caso, los binarios se detectan automáticamente y se saltan.
+
+### Auditar Archivos Filtrados
+
+**Consultar rechazos después del escaneo**:
+```bash
+curl -X GET "http://localhost:8000/api/admin/filter-stats?job_id=550e8400-e29b-41d4-a716-446655440000&limit=10"
+```
+
+**Response**:
+```json
+{
+  "total_scans_with_filters": 1,
+  "total_files_filtered": 5,
+  "scans": [
+    {
+      "job_id": "550e8400-e29b-41d4-a716-446655440000",
+      "timestamp": "2026-04-06T10:30:00Z",
+      "skipped_count": 5,
+      "skipped_files": [
+        {
+          "path": "/data/github-repos/image.png",
+          "reason": "MIME type image/png detected as binary, skipped early"
+        },
+        {
+          "path": "/data/github-repos/video.mp4",
+          "reason": "MIME type video/mp4 detected as binary, skipped early"
+        },
+        {
+          "path": "/data/github-repos/program.exe",
+          "reason": "extension in blacklist: .exe"
+        },
+        {
+          "path": "/data/github-repos/archive.zip",
+          "reason": "MIME type application/zip detected as binary, skipped early"
+        },
+        {
+          "path": "/data/github-repos/lib.so",
+          "reason": "extension in blacklist: .so"
+        }
+      ],
+      "entry_id": "audit-2026-04-06-10-30"
+    }
+  ]
+}
+```
+
+### Cambiar Configuración Sin Reiniciar
+
+**Opción 1: Variables de entorno (requiere reinicio)**:
+```bash
+docker-compose down
+INGESTION_MODE=whitelist ALLOWED_EXTENSIONS=".pdf,.docx" docker-compose up -d backend
+```
+
+**Opción 2: Por job sin reinicio (✅ Recomendado)**:
+```bash
+# Cada request puede especificar su propia configuración
+curl -X POST http://localhost:8000/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "/data/scan1",
+    "ingestion_mode": "whitelist",
+    "allowed_extensions": [".pdf"]
+  }'
+
+# Y luego otro job con configuración diferente
+curl -X POST http://localhost:8000/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "/data/scan2",
+    "ingestion_mode": "blacklist",
+    "denied_extensions": [".exe", ".zip"]
+  }'
+```
+
+**Opción 3: Frontend UI (✅ Más fácil para usuarios finales)**:
+1. Abrir formulario de nuevo job en UI
+2. Ir a sección "Filter Configuration"
+3. Seleccionar modo (whitelist/blacklist)
+4. Configurar extensiones permitidas/rechazadas
+5. Lanzar escaneo
+
+---
+
 ### Comparación: Local vs Google Drive vs SharePoint
 
 | Característica | Local | Google Drive | SharePoint |

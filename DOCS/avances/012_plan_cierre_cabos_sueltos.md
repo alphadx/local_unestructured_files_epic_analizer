@@ -1,6 +1,6 @@
 ---
 fecha: 2026-04-06
-status: 🚀 HITO 1 COMPLETADO
+status: 🚀 HITO 2 COMPLETADO
 categoría: Plan — Cierre de pendientes
 ---
 
@@ -95,7 +95,16 @@ Objetivo: evitar trabajo inútil y reducir riesgo de enviar contenido sin valor 
 
 ## Hito 2 — Cierre documental
 
-Objetivo: dejar el comportamiento operativo claro para despliegue y soporte.
+✅ **COMPLETADO** — Ver detalle en [DOCS/avances/014_hito2_cierre_documental.md](014_hito2_cierre_documental.md)
+
+**Qué se hizo**:
+- Agregada sección "Configuración de despliegue: Estrategia de ingesta" en README con 180+ líneas
+- 3 ejemplos prácticos por sector (corporativo, repositorio abierto, forense)
+- Tabla comparativa de 5 escenarios de configuración
+- Nuevas secciones en USAGE_EXAMPLES.md: 3 escenarios de filtrado con requests/responses
+- Auditoría explicada: endpoint `/api/admin/filter-stats` con ejemplos reales
+- Tres formas de cambiar estrategia (vars env, API, frontend) sin reiniciar
+- Coherencia verificada entre README, USAGE_EXAMPLES y docs de avance
 
 - reflejar reglas de ingesta en la guía de despliegue
 - consolidar README y USAGE_EXAMPLES para que no contradigan la semántica real
@@ -105,7 +114,7 @@ Objetivo: dejar el comportamiento operativo claro para despliegue y soporte.
 
 ## Hito 3 — Dependencias y fallback
 
-Objetivo: hacer explícita la historia de `hdbscan` para evitar sorpresas en instalación.
+⏳ EN PROGRESO
 
 - documentar que `hdbscan` es opcional
 - explicar qué hace el sistema cuando no está instalado

@@ -32,8 +32,8 @@
 - [x] Cubrir binarios, ejecutables y comprimidos con reglas explícitas y tests de regresión.
 
 ### Hito 2 — Cierre documental
-- [ ] Reflejar reglas de `mime_type` y extensiones en la guía de despliegue.
-- [ ] Asegurar que README, USAGE_EXAMPLES y la documentación de avance describan el comportamiento final sin contradicciones.
+- [x] Reflejar reglas de `mime_type` y extensiones en la guía de despliegue.
+- [x] Asegurar que README, USAGE_EXAMPLES y la documentación de avance describan el comportamiento final sin contradicciones.
 
 ### Hito 3 — Dependencias y fallback
 - [ ] Documentar `hdbscan` como dependencia opcional.

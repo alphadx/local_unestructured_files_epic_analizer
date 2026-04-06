@@ -266,6 +266,169 @@ docker run -p 8001:8000 chromadb/chroma:0.5.0
 
 ---
 
+## Configuración de despliegue: Estrategia de ingesta
+
+### Entender whitelist vs. blacklist
+
+Epic Analyzer ofrece dos estrategias configurables para decidir qué archivos procesar:
+
+**Modo `blacklist` (por defecto)**
+- Procesa TODOS los archivos EXCEPTO los explícitamente excluidos
+- Variables: `DENIED_EXTENSIONS`, `DENIED_MIME_TYPES`
+- Ideal para: repositorios abiertos, análisis exploratorio
+- Riesgo: puede intentar procesar formatos inesperados
+- Ejemplo: rechaza `.exe`, `.zip`, `.jpg` pero acepta todo lo demás
+
+**Modo `whitelist`**
+- Procesa SOLO los archivos explícitamente permitidos
+- Variables: `ALLOWED_EXTENSIONS`, `ALLOWED_MIME_TYPES` (se requiere al menos una)
+- Ideal para: entornos corporativos, cumplimiento normativo
+- Ventaja: control granular, evita sorpresas
+- Ejemplo: solo `.pdf`, `.docx`, `.xlsx` — rechaza todo lo demás
+
+### Detección temprana de binarios
+
+Independientemente del modo elegido, Epic Analyzer detecta y salta automáticamente:
+- **Ejecutables**: `.exe`, `.dll`, `.so`, `.dylib`, `.msi`, `.jar`, `.com`, `.bat`, `.cmd`
+- **Imágenes**: `.jpg`, `.jpeg`, `.png`, `.gif`, `.bmp`, `.webp`, `.ico`
+- **Vídeo/Audio**: `.mp4`, `.avi`, `.mov`, `.mkv`, `.mp3`, `.wav`
+- **Comprimidos**: `.zip`, `.tar`, `.gz`, `.rar`, `.7z`, `.bz2`, `.xz`
+- **MIME types binarios**: `image/*`, `video/*`, `audio/*`, `application/octet-stream`, etc.
+
+**Beneficio**: No intenta extraer contenido de binarios (ahorra tiempo y evita errores).
+
+### Ejemplos de configuración por sector
+
+#### Ejemplo 1: Corporativo (Whitelist)
+
+**Caso**: Auditoría de corpus corporativo. Solo interesa documentos de negocio.
+
+```bash
+# Backend: .env
+INGESTION_MODE=whitelist
+ALLOWED_EXTENSIONS=.txt,.pdf,.docx,.xlsx,.csv,.json,.xml
+ALLOWED_MIME_TYPES=text/,application/pdf,application/msword,application/vnd
+```
+
+**Desde frontend** (sin reiniciar):
+```json
+POST /api/jobs
+{
+  "path": "/data/corporativo",
+  "source_provider": "local",
+  "ingestion_mode": "whitelist",
+  "allowed_extensions": [".pdf", ".docx", ".xlsx"],
+  "allowed_mime_types": ["text/", "application/pdf"],
+  "enable_embeddings": true,
+  "enable_clustering": true
+}
+```
+
+**Resultado**: Solo PDF, Word, Excel. Rechaza imágenes, ejecutables, comprimidos.
+
+#### Ejemplo 2: Repositorio abierto (Blacklist)
+
+**Caso**: Análisis de GitHub/GitLab. Puede haber de todo, pero queremos evitar ejecutables y comprimidos.
+
+```bash
+# Backend: .env
+INGESTION_MODE=blacklist
+DENIED_EXTENSIONS=.exe,.dll,.so,.dylib,.bin,.msi,.jar,.zip,.tar,.gz,.rar,.7z
+DENIED_MIME_TYPES=application/x-executable,application/x-sharedlib,application/zip,application/gzip
+```
+
+**Desde frontend** (sin reiniciar):
+```json
+POST /api/jobs
+{
+  "path": "/data/github-repos",
+  "source_provider": "local",
+  "ingestion_mode": "blacklist",
+  "denied_extensions": [".exe", ".zip", ".tar", ".gz"],
+  "denied_mime_types": ["application/x-executable", "application/zip"],
+  "enable_embeddings": true
+}
+```
+
+**Resultado**: Procesa `.md`, `.py`, `.js`, `.json`, `.txt`, etc. Rechaza solo lo peligroso/comprimido.
+
+#### Ejemplo 3: Investigación forense (Whitelist estricto)
+
+**Caso**: Análisis criminal/auditoría de cumplimiento. Solo documentos de valor legal.
+
+```bash
+# Backend: .env
+INGESTION_MODE=whitelist
+ALLOWED_EXTENSIONS=.pdf,.doc,.docx,.xlsx,.eml,.msg
+ALLOWED_MIME_TYPES=application/pdf,application/msword,application/vnd,message/
+```
+
+**Resultado**: PDF, Word, Excel, emails. Rechaza todo lo demás.
+
+### Tabla de recomendaciones por escenario
+
+| Escenario | Modo | `ALLOWED_EXTENSIONS` (si whitelist) | `DENIED_EXTENSIONS` (si blacklist) | Riesgo de falsos negativos | Riesgo de procesar inútil |
+|-----------|------|-------------------------------------|------------------------------------|--------------------------|--------------------------|
+| Corporativo | whitelist | `.pdf,.docx,.xlsx,.csv` | — | Bajo | Muy bajo |
+| Repositorio GitHub | blacklist | — | `.exe,.zip,.tar,.gz,.jpg` | Muy bajo | Bajo |
+| Forense/Legal | whitelist | `.pdf,.msg,.eml,.doc` | — | Bajo | Nulo |
+| Análisis exploratorio | blacklist | — | `.exe,.zip` (mínimos) | Nulo | Medio |
+| Intranet corporativa | whitelist | `.txt,.pdf,.docx,.md` | — | Bajo | Bajo |
+
+### Cambiar estrategia sin reiniciar
+
+**Opción 1: Variables de entorno (requiere reinicio del backend)**
+```bash
+docker-compose down
+DENIED_EXTENSIONS=".exe,.zip" docker-compose up -d backend
+```
+
+**Opción 2: Sobrescribir por job (Sin reinicio)** ✅ Recomendado
+```bash
+curl -X POST http://localhost:8080/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "/path/to/scan",
+    "ingestion_mode": "whitelist",
+    "allowed_extensions": [".pdf", ".docx"]
+  }'
+```
+
+**Opción 3: Frontend UI** ✅ Recomendado para usuarios finales
+- Abrir formulario de nuevo job
+- Ir a sección "Filter Configuration"
+- Seleccionar modo y extensiones
+- Lanzar scan
+
+### Auditoría de filtrado
+
+Ver qué archivos fueron rechazados:
+
+```bash
+curl http://localhost:8080/api/admin/filter-stats?job_id=<JOB_ID>
+```
+
+Respuesta:
+```json
+{
+  "total_scans_with_filters": 1,
+  "total_files_filtered": 3,
+  "scans": [
+    {
+      "job_id": "abc123",
+      "skipped_count": 3,
+      "skipped_files": [
+        {"path": "/path/to/lib.so", "reason": "extension in blacklist: .so"},
+        {"path": "/path/to/image.png", "reason": "MIME type image/png detected as binary, skipped early"},
+        {"path": "/path/to/archive.zip", "reason": "MIME type application/zip detected as binary, skipped early"}
+      ]
+    }
+  ]
+}
+```
+
+---
+
 ## Referencia de API
 
 La documentación interactiva completa está disponible en `http://localhost:8080/docs` (Swagger UI).
