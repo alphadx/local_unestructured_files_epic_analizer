@@ -1,6 +1,6 @@
 ---
 fecha: 2026-04-06
-status: 🚀 HITO 2 COMPLETADO
+status: 🌟 PLAN COMPLETADO
 categoría: Plan — Cierre de pendientes
 ---
 
@@ -114,7 +114,15 @@ Objetivo: evitar trabajo inútil y reducir riesgo de enviar contenido sin valor 
 
 ## Hito 3 — Dependencias y fallback
 
-⏳ EN PROGRESO
+✅ **COMPLETADO** — Ver detalle en [DOCS/avances/015_hito3_hdbscan_fallback.md](015_hito3_hdbscan_fallback.md)
+
+**Qué se hizo**:
+- Nueva sección en README: "HDBSCAN (opcional — clustering de densidad)"
+- Explicación clara de cuándo instalar (5 criterios prácticos)
+- Documentación del fallback automático: HDBSCAN → DBSCAN → LabelPropagation
+- Código verificado en clustering_service.py: cadena de fallback existe y funciona
+- Instrucción de instalación opcional (pip + Docker)
+- Notas de deployment para operadores
 
 - documentar que `hdbscan` es opcional
 - explicar qué hace el sistema cuando no está instalado
@@ -124,7 +132,16 @@ Objetivo: evitar trabajo inútil y reducir riesgo de enviar contenido sin valor 
 
 ## Hito 4 — Validación final
 
-Objetivo: cerrar el ciclo con evidencia.
+✅ **COMPLETADO** — Ver detalle en [DOCS/avances/016_hito4_validacion_final.md](016_hito4_validacion_final.md)
+
+**Qué se valido**:
+- Análisis estático: 0 errores (Pylance en todos los archivos modificados)
+- Sintaxis Python: Validada completa
+- Tests unitarios: 3 nuevos tests con estructura correcta
+- Documentación: Coherencia verificada (README + USAGE_EXAMPLES + DOCS/avances)
+- Fallback logic: HDBSCAN → DBSCAN → LabelPropagation validado en código
+- Variables env: Consistentes entre README y servicios
+- Audit trail: extraction_method="skipped_binary" para rastreo
 
 - correr pruebas unitarias del filtro
 - correr E2E del pipeline de ingesta

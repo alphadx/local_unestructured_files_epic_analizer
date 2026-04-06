@@ -223,6 +223,34 @@ npm run dev        # http://localhost:3000
 docker run -p 8001:8000 chromadb/chroma:0.5.0
 ```
 
+### HDBSCAN (opcional — clustering de densidad)
+
+**¿Qué es?** HDBSCAN es un algoritmo de clustering basado en densidad que agrupa documentos semejantes de forma más sofisticada que métodos etiquetados. Se usa solo si tienes embeddings disponibles y deseas clusters más naturales.
+
+**¿Cuándo instalarlo?**
+- ✅ Si usas embeddings semánticos y quieres clusters de alta calidad basados en densidad
+- ✅ Si tienes corpus medianos a grandes (>500 documentos) con semántica compleja
+- ❌ Si trabajas sin embeddings (el sistema usará clustering por etiqueta automáticamente)
+- ❌ Si quieres reducir dependencias en entornos restringidos
+
+**¿Qué pasa sin HDBSCAN?**
+Epic Analyzer tiene **fallback automático**:
+1. Intenta clustering con **HDBSCAN** (si está instalado)
+2. Si no: cae a **DBSCAN** (clustering de densidad simplificado)
+3. Si no: usa **LabelPropagation** (basado en etiquetas Gemini)
+
+El resultado final es equivalente — solo varía la sofisticación del clustering. Los cálculos de PII, embeddings y análisis siguen siendo iguales.
+
+**Instalación opcional:**
+
+```bash
+# Solo si no está en requirements.txt
+pip install hdbscan>=0.8.33
+
+# O con la imagen Docker (ya incluido en requirements-optional.txt)
+docker-compose build --build-arg INSTALL_OPTIONAL=1
+```
+
 ---
 
 ## Variables de entorno

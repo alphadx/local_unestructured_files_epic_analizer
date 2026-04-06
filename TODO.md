@@ -36,12 +36,12 @@
 - [x] Asegurar que README, USAGE_EXAMPLES y la documentación de avance describan el comportamiento final sin contradicciones.
 
 ### Hito 3 — Dependencias y fallback
-- [ ] Documentar `hdbscan` como dependencia opcional.
-- [ ] Explicar el fallback efectivo cuando `hdbscan` no esté disponible.
+- [x] Documentar `hdbscan` como dependencia opcional.
+- [x] Explicar el fallback efectivo cuando `hdbscan` no esté disponible.
 
 ### Hito 4 — Validación final
-- [ ] Ejecutar pruebas unitarias y E2E que cubran filtros, auditoría y rutas de ingesta.
-- [ ] Cerrar el plan solo cuando la cobertura de regresión y la documentación estén coherentes entre sí.
+- [x] Ejecutar pruebas unitarias y E2E que cubran filtros, auditoría y rutas de ingesta.
+- [x] Cerrar el plan solo cuando la cobertura de regresión y la documentación estén coherentes entre sí.
 
 ## Prioridad media: documentación de API y fuentes
 
