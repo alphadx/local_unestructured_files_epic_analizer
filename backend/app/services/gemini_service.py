@@ -22,6 +22,8 @@ from app.models.schemas import (
     DocumentMetadata,
     DocumentRelations,
     FileIndex,
+    NamedEntity,
+    NamedEntityType,
     PiiInfo,
     RiskLevel,
     SemanticAnalysis,
@@ -66,6 +68,9 @@ Analiza el siguiente documento y devuelve ÚNICAMENTE un objeto JSON válido con
     "risk_level": "<verde|amarillo|rojo>",
     "details": ["<descripción de PII encontrada>"]
   },
+  "entidades_nombradas": [
+    {"tipo": "<PERSON|ORGANIZATION|LOCATION|DATE|MONEY>", "valor": "<texto exacto>", "confianza": <0.0-1.0>}
+  ],
   "fecha_emision": "<YYYY-MM-DD o null>",
   "periodo_fiscal": "<YYYY-MM o null>"
 }
@@ -75,6 +80,10 @@ Reglas:
 - `palabras_clave` debe contener como máximo 5 elementos únicos y no vacíos.
 - `fecha_emision` debe usar formato YYYY-MM-DD o null.
 - `periodo_fiscal` debe usar formato YYYY-MM o null.
+- `entidades_nombradas` debe listar personas (PERSON), empresas/instituciones (ORGANIZATION),
+  lugares/direcciones (LOCATION), fechas relevantes (DATE) y montos (MONEY) encontrados en el documento.
+  No incluyas emails, RUTs ni teléfonos en este campo (se extraen por separado).
+  Si no hay entidades semánticas, usa [].
 - No incluyas ningún texto fuera del JSON.
 """
 
@@ -175,6 +184,7 @@ class _ClassificationPayload(BaseModel):
     relaciones: _ClassificationRelations = Field(default_factory=_ClassificationRelations)
     analisis_semantico: _ClassificationSemantic = Field(default_factory=_ClassificationSemantic)
     pii_info: _ClassificationPii = Field(default_factory=_ClassificationPii)
+    entidades_nombradas: list[dict] = Field(default_factory=list)
     fecha_emision: str | None = None
     periodo_fiscal: str | None = None
 
@@ -230,6 +240,33 @@ def _payload_to_metadata(payload: _ClassificationPayload, file_index: FileIndex)
     except ValueError:
         categoria = DocumentCategory.UNKNOWN
 
+    _GEMINI_TYPE_MAP = {
+        "PERSON": NamedEntityType.PERSON,
+        "ORGANIZATION": NamedEntityType.ORGANIZATION,
+        "LOCATION": NamedEntityType.LOCATION,
+        "DATE": NamedEntityType.DATE,
+        "MONEY": NamedEntityType.MONEY,
+    }
+    named_entities: list[NamedEntity] = []
+    for item in payload.entidades_nombradas:
+        tipo = str(item.get("tipo", "")).upper()
+        valor = str(item.get("valor", "")).strip()
+        if not valor or tipo not in _GEMINI_TYPE_MAP:
+            continue
+        try:
+            confidence = float(item.get("confianza", 0.8))
+            confidence = max(0.0, min(1.0, confidence))
+        except (TypeError, ValueError):
+            confidence = 0.8
+        named_entities.append(
+            NamedEntity(
+                entity_type=_GEMINI_TYPE_MAP[tipo],
+                value=valor,
+                confidence=confidence,
+                source="gemini",
+            )
+        )
+
     return DocumentMetadata(
         documento_id=file_index.sha256 or file_index.path,
         file_index=file_index,
@@ -255,6 +292,7 @@ def _payload_to_metadata(payload: _ClassificationPayload, file_index: FileIndex)
             risk_level=payload.pii_info.risk_level,
             details=payload.pii_info.details,
         ),
+        named_entities=named_entities,
         fecha_emision=payload.fecha_emision,
         periodo_fiscal=payload.periodo_fiscal,
     )
@@ -297,18 +335,33 @@ def _classify_with_text(file_index: FileIndex, text_content: str) -> DocumentMet
     return _parse_response(response.text, file_index)
 
 
+def _enrich_with_regex_ner(metadata: DocumentMetadata, text: str) -> DocumentMetadata:
+    """Run Layer 1 regex NER and merge results with any existing Gemini entities."""
+    from app.services.ner_service import _deduplicate, _extract_regex_entities
+
+    regex_entities = _extract_regex_entities(text)
+    merged = _deduplicate(regex_entities + list(metadata.named_entities))
+    metadata.named_entities = merged
+    return metadata
+
+
 def classify_document(file_index: FileIndex, extracted_text: str | None = None) -> DocumentMetadata:
     """
     Send a file to Gemini Flash for classification and metadata extraction.
 
     Falls back to a stub when the API key is absent or the call fails.
+    Always runs regex NER (Layer 1) on available text content.
     """
     if not settings.gemini_api_key:
         logger.debug("Gemini API key not set – returning stub for %s", file_index.path)
-        return _stub_metadata(file_index)
+        metadata = _stub_metadata(file_index)
+        if extracted_text and extracted_text.strip():
+            metadata = _enrich_with_regex_ner(metadata, extracted_text)
+        return metadata
 
     if extracted_text and extracted_text.strip():
-        return _classify_with_text(file_index, extracted_text)
+        metadata = _classify_with_text(file_index, extracted_text)
+        return _enrich_with_regex_ner(metadata, extracted_text)
 
     from google.genai import types  # type: ignore
 
@@ -318,6 +371,7 @@ def classify_document(file_index: FileIndex, extracted_text: str | None = None) 
     try:
         mime = file_index.mime_type or ""
         max_bytes = settings.max_file_size_mb * 1024 * 1024
+        text_for_ner: str = ""
 
         if mime in _SUPPORTED_MIME_TYPES or path.suffix.lower() == ".pdf":
             file_size = path.stat().st_size
@@ -345,10 +399,10 @@ def classify_document(file_index: FileIndex, extracted_text: str | None = None) 
 
         elif path.suffix.lower() in _TEXT_EXTENSIONS:
             with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                text_content = fh.read(20_000)
+                text_for_ner = fh.read(20_000)
             response = client.models.generate_content(
                 model=settings.gemini_flash_model,
-                contents=_CLASSIFICATION_PROMPT + "\n\nContenido del documento:\n" + text_content,
+                contents=_CLASSIFICATION_PROMPT + "\n\nContenido del documento:\n" + text_for_ner,
             )
 
         else:
@@ -362,7 +416,10 @@ def classify_document(file_index: FileIndex, extracted_text: str | None = None) 
                 ),
             )
 
-        return _parse_response(response.text, file_index)
+        metadata = _parse_response(response.text, file_index)
+        if text_for_ner:
+            metadata = _enrich_with_regex_ner(metadata, text_for_ner)
+        return metadata
 
     except Exception as exc:  # noqa: BLE001
         logger.error("Gemini classification failed for %s: %s", file_index.path, exc)

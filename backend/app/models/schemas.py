@@ -43,6 +43,18 @@ class ArtifactKind(str, Enum):
     CHUNK = "fragmento"
 
 
+class NamedEntityType(str, Enum):
+    PERSON = "PERSON"
+    ORGANIZATION = "ORGANIZATION"
+    LOCATION = "LOCATION"
+    EMAIL = "EMAIL"
+    PHONE = "PHONE"
+    RUT = "RUT"
+    DATE = "DATE"
+    MONEY = "MONEY"
+    OTHER = "OTHER"
+
+
 # ---------------------------------------------------------------------------
 # File-level schemas
 # ---------------------------------------------------------------------------
@@ -88,6 +100,34 @@ class PiiInfo(BaseModel):
     details: list[str] = Field(default_factory=list)
 
 
+class NamedEntity(BaseModel):
+    """A single named entity extracted from a document."""
+
+    entity_type: NamedEntityType
+    value: str
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    source: str = "regex"  # "regex" | "gemini"
+
+
+class ContactRecord(BaseModel):
+    """Aggregated view of a named entity across all documents in a job."""
+
+    entity_type: NamedEntityType
+    value: str
+    frequency: int
+    document_ids: list[str] = Field(default_factory=list)
+    source_paths: list[str] = Field(default_factory=list)
+
+
+class ContactsReport(BaseModel):
+    """Summary of all named entities extracted across a job's documents."""
+
+    job_id: str
+    total_documents_analyzed: int
+    total_entities_found: int
+    contacts: list[ContactRecord] = Field(default_factory=list)
+
+
 class DocumentMetadata(BaseModel):
     """Full AI-enriched record for a document."""
 
@@ -101,6 +141,7 @@ class DocumentMetadata(BaseModel):
     pii_info: PiiInfo = Field(default_factory=PiiInfo)
     fecha_emision: str | None = None
     periodo_fiscal: str | None = None
+    named_entities: list[NamedEntity] = Field(default_factory=list)
     # Internal: not serialised to API clients
     embedding: list[float] | None = Field(default=None, exclude=True)
 

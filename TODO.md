@@ -61,7 +61,7 @@
 
 ## Intelligent Execution Layer
 
-- [ ] Sincronizar `.ai/project/context.md` cuando cambien endpoints, schemas o contratos de despliegue.
+- ~~Sincronizar `.ai/project/context.md` cuando cambien endpoints, schemas o contratos de despliegue.~~ ✅ **COMPLETADO** — Actualizado con NER schemas, endpoint `/contacts` y tabla de endpoints.
 - [ ] Añadir verificacion CI o smoke tests que validen la capa `.ai` cuando exista un workflow automatizado.
 - [ ] Revisar si nuevos cambios en frontend o backend requieren skills adicionales en `.ai/skills/`.
 
@@ -120,11 +120,11 @@
 **Objetivo**: Extraer entidades nombradas (personas, organizaciones, RUTs, emails, teléfonos) del corpus.
 
 **Tareas**:
-- [ ] Agregar campo `named_entities` o `contact_records` en `DocumentMetadata` (schemas.py).
-- [ ] Extender el prompt de Gemini en `gemini_service.py` para devolver NER adicionales además de campos contables (emisor, receptor, monto, moneda).
-- [ ] Crear endpoint `/api/reports/{job_id}/contacts` para listar contactos detectados con frecuencia.
+- ~~Agregar campo `named_entities` o `contact_records` en `DocumentMetadata` (schemas.py).~~ ✅ **COMPLETADO** — `NamedEntity`, `ContactRecord`, `ContactsReport` en `schemas.py`. Campo `named_entities` en `DocumentMetadata`.
+- ~~Extender el prompt de Gemini en `gemini_service.py` para devolver NER adicionales además de campos contables (emisor, receptor, monto, moneda).~~ ✅ **COMPLETADO** — Prompt extendido con `entidades_nombradas`; pipeline híbrido (regex + Gemini) en `ner_service.py`.
+- ~~Crear endpoint `/api/reports/{job_id}/contacts` para listar contactos detectados con frecuencia.~~ ✅ **COMPLETADO** — `GET /api/reports/{job_id}/contacts` con filtros `entity_type` y `min_frequency`.
 - [ ] Agregar vista/tabla en frontend para explorar entidades encontradas.
-- [ ] Documentar en USAGE_EXAMPLES.md ejemplos de request/response para contactos.
+- ~~Documentar en USAGE_EXAMPLES.md ejemplos de request/response para contactos.~~ ✅ **COMPLETADO** — Sección 9 en [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md).
 
 **Beneficios**:
 - Capa de datos de personas/empresas extraídas sin procesamiento manual.
@@ -154,26 +154,19 @@
 ---
 
 ### 4. NER (Named Entity Recognition) y extracción de contactos
-**Status**: ✅ **INVESTIGACIÓN COMPLETADA**  
+**Status**: ✅ **IMPLEMENTADO (Fase 1)**  
 **Documento**: [DOCS/avances/008_investigacion_ner_contactos.md](DOCS/avances/008_investigacion_ner_contactos.md)
 
-**Hallazgos principales**:
-- Técnicas: CRF clásico → BiLSTM-CRF → BERT-based → LLM-based (Gemini, GPT)
-- Soluciones evaluadas: spaCy, HuggingFace Transformers, Gemini, Azure API, OpenAI
-- **Estrategia híbrida recomendada** (3 capas):
-  - Layer 1: Regex para email, RUT, teléfono (precisión 100%, sin costo compute)
-  - Layer 2: spaCy local para PER/ORG/LOC (10-50ms, CPU-friendly)
-  - Layer 3: Gemini para contexto complejo, entidades ambiguas, custom types
+**Implementación realizada**:
+- **Layer 1 (regex, CPU-only)**: Extracción de emails, RUTs chilenos y teléfonos en `ner_service.py`.
+- **Layer 2 (Gemini)**: Prompt extendido en `gemini_service.py` para extraer PERSON, ORGANIZATION, LOCATION, DATE, MONEY.
+- **Schema**: `NamedEntityType`, `NamedEntity`, `ContactRecord`, `ContactsReport` añadidos a `schemas.py`. Campo `named_entities` en `DocumentMetadata`.
+- **Endpoint**: `GET /api/reports/{job_id}/contacts` con filtros por `entity_type` y `min_frequency`.
+- **Tests**: 16 tests unitarios e integración en `tests/test_ner_service.py`.
 
-**Implementación recomendada**:
-- [ ] **Fase 1 (inmediato, 4-6h)**: Extender Gemini con tipos NER + schema DocumentMetadata + endpoint contacts
+**Próximas fases**:
 - [ ] **Fase 2 (mediano, 1-2 sprints)**: Integrar spaCy + base de datos de contactos si PostgreSQL se implementa
 - [ ] **Fase 3 (futuro)**: Entity linking a externa knowledge graphs (CRM, DBpedia)
-
-**Costo/Beneficio**:
-- Fase 1: Negligible (tokens Gemini existentes), +30-50% recall de contactos
-- Fase 2: ~$200/mes GPU (opcional para acelerar), -60% latencia
-- Prioridad: Baja-media (puede combinarse con otras investigaciones)
 
 ---
 
@@ -233,7 +226,7 @@
 - [ ] Implementar cola async con Celery + Redis.
 
 ### Fase 5 — Inteligencia avanzada (_EN INVESTIGACIÓN_)
-- [ ] NER generalizado y base de datos de contactos.
+- [x] **NER generalizado y base de datos de contactos** — Fase 1 implementada: `ner_service.py`, `named_entities` en `DocumentMetadata`, endpoint `/api/reports/{job_id}/contacts`.
 - [ ] Ranking híbrido moderno.
 - [ ] Filtrado mejorado de binarios para LLM.
 

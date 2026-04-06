@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.models.schemas import (
+    ContactsReport,
     CorpusExplorationReport,
     DataHealthReport,
     DocumentChunk,
@@ -11,6 +12,7 @@ from app.models.schemas import (
     GroupAnalysisResult,
     GroupSimilarityResponse,
     JobStatistics,
+    NamedEntityType,
     ScanComparisonResponse,
 )
 from app.services.analytics_service import build_corpus_exploration, build_job_statistics
@@ -20,6 +22,7 @@ from app.services.executive_summary_service import (
     render_summary_pdf,
 )
 from app.services.export_service import documents_to_csv, documents_to_json_payload
+from app.services.ner_service import build_contacts_report
 from app.services import job_manager
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -223,6 +226,49 @@ async def compare_job_scans(
         include_unchanged=include_unchanged,
         limit=limit,
     )
+
+
+@router.get("/{job_id}/contacts", response_model=ContactsReport)
+async def get_contacts(
+    job_id: str,
+    entity_type: NamedEntityType | None = Query(
+        default=None,
+        description="Filter results by entity type (e.g. PERSON, ORGANIZATION, EMAIL).",
+    ),
+    min_frequency: int = Query(
+        default=1,
+        ge=1,
+        description="Only include contacts that appear at least this many times.",
+    ),
+) -> ContactsReport:
+    """
+    Return aggregated named entities (contacts) extracted from all documents in a job.
+
+    Entities are extracted via a hybrid NER pipeline:
+    - Layer 1 (regex): emails, Chilean RUTs, phone numbers — always present.
+    - Layer 2 (Gemini): persons, organizations, locations, dates, money amounts
+      (available when documents were classified with Gemini).
+
+    Results are sorted by frequency (most common first).
+    Use `entity_type` to narrow results to a specific type and `min_frequency`
+    to filter out rare mentions.
+    """
+    job = job_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    documents = job_manager.get_documents(job_id)
+    report = build_contacts_report(job_id, documents)
+
+    if entity_type is not None or min_frequency > 1:
+        report.contacts = [
+            c
+            for c in report.contacts
+            if (entity_type is None or c.entity_type == entity_type)
+            and c.frequency >= min_frequency
+        ]
+
+    return report
 
 
 @router.get("/{job_id}/executive-summary/pdf")
