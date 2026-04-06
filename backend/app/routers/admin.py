@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.db.session import get_db
 from app.models.schemas import FilterConfiguration
-from app.services.audit_log import AuditEntry, get_all
+from app.services.audit_log import AuditEntry, get_all_async
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -27,6 +29,7 @@ async def get_filter_stats(
     job_id: str | None = Query(default=None, description="Filter by specific job ID"),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Return statistics about filtered files from recent scans.
@@ -55,7 +58,8 @@ async def get_filter_stats(
         }
     """
     # Fetch all scan.files_filtered audit entries, newest first
-    entries = get_all(
+    entries = await get_all_async(
+        db,
         operation="scan.files_filtered",
         resource_type="job",
         limit=limit + offset,  # Get extra to account for offset

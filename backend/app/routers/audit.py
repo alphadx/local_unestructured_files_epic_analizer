@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.audit_log import AuditEntry, get_all, total_count
+from app.db.session import get_db
+from app.services.audit_log import AuditEntry, get_all_async, total_count_async
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 
@@ -22,25 +24,16 @@ def _entry_to_dict(entry: AuditEntry) -> dict:
 
 @router.get("")
 async def list_audit_entries(
-    operation: str | None = Query(default=None, description="Filter by operation name"),
-    resource_type: str | None = Query(default=None, description="Filter by resource type"),
+    operation: str | None = Query(default=None),
+    resource_type: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """
-    Return the immutable audit log.
-
-    Entries are returned newest-first. The log records key operations:
-    job creation, completion, failure, reorganization, and search queries.
-    """
-    entries = get_all(
-        operation=operation,
-        resource_type=resource_type,
-        limit=limit,
-        offset=offset,
-    )
+    entries = await get_all_async(db, operation=operation, resource_type=resource_type, limit=limit, offset=offset)
+    total = await total_count_async(db)
     return {
-        "total": total_count(),
+        "total": total,
         "offset": offset,
         "limit": limit,
         "entries": [_entry_to_dict(e) for e in entries],

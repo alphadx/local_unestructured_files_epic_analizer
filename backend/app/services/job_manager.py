@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 """
-In-memory job store + async pipeline runner.
+PostgreSQL-backed job store + async pipeline runner.
 
-Jobs are identified by a UUID and stored in a plain dict.
-For a production deployment this would be replaced by a proper task queue
-(Celery / ARQ), but for the MVP in-memory is sufficient.
+All job state is persisted to PostgreSQL via SQLAlchemy async sessions.
+Real-time log streaming is provided by Redis pub/sub
+(channel ``job:{job_id}:logs``).  The `_log_subscribers` dict is kept
+for in-process WebSocket delivery within the FastAPI process.
 """
 
 import asyncio
@@ -13,8 +14,13 @@ import logging
 import time
 import uuid
 from collections import defaultdict
+from datetime import datetime, timezone
 from functools import partial
 from typing import Any
+
+import redis.asyncio as aioredis
+from sqlalchemy import select, delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.schemas import (
     DataHealthReport,
@@ -30,6 +36,8 @@ from app.models.schemas import (
     SourceProvider,
 )
 from app.config import settings
+from app.db import models as db_models
+from app.db.session import AsyncSessionLocal
 from app.services.source_service import (
     cleanup_source_path,
     prepare_scan_source,
@@ -41,22 +49,68 @@ logger = logging.getLogger(__name__)
 
 _SCAN_TIMEOUT_SECONDS = 300  # 5-minute hard limit for the filesystem scan
 
-# job_id -> JobProgress
-_jobs: dict[str, JobProgress] = {}
-# job_id -> DataHealthReport (once completed)
-_reports: dict[str, DataHealthReport] = {}
-# job_id -> list[DocumentMetadata]
-_documents: dict[str, list[DocumentMetadata]] = {}
-# job_id -> list[DocumentChunk]
-_chunks: dict[str, list[DocumentChunk]] = {}
-# job_id -> list of timestamped log lines
-_job_logs: dict[str, list[str]] = {}
-# job_id -> active websocket subscriber queues for live logs
+# job_id -> active websocket subscriber queues for live logs (in-process only)
 _log_subscribers: dict[str, list[asyncio.Queue[str]]] = defaultdict(list)
-# job_id -> GroupAnalysisResult (once completed)
-_group_analysis: dict[str, GroupAnalysisResult] = {}
-# job_id -> epoch creation time (for retention pruning)
-_job_creation_times: dict[str, float] = {}
+
+# ---------------------------------------------------------------------------
+# Redis client (module-level, lazily initialised)
+# ---------------------------------------------------------------------------
+
+_redis: aioredis.Redis | None = None
+
+
+def _get_redis() -> aioredis.Redis:
+    global _redis
+    if _redis is None:
+        _redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    return _redis
+
+
+# ---------------------------------------------------------------------------
+# Internal DB helpers
+# ---------------------------------------------------------------------------
+
+
+async def _update_job(db: AsyncSession, job_id: str, **fields: Any) -> None:
+    """Update scalar and/or extra-dict fields on a Job row."""
+    row = await db.get(db_models.Job, job_id)
+    if row is None:
+        return
+
+    extra_override: dict | None = fields.pop("extra", None)
+    extra_merge: dict | None = fields.pop("extra_update", None)
+
+    for key, value in fields.items():
+        setattr(row, key, value)
+
+    if extra_override is not None:
+        row.extra = extra_override
+    if extra_merge is not None:
+        merged = dict(row.extra or {})
+        merged.update(extra_merge)
+        row.extra = merged
+
+    row.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+
+async def _load_job_progress(db: AsyncSession, job_id: str) -> JobProgress | None:
+    row = await db.get(db_models.Job, job_id)
+    if row is None:
+        return None
+    return _row_to_progress(row)
+
+
+def _row_to_progress(row: db_models.Job) -> JobProgress:
+    extra = row.extra or {}
+    return JobProgress(
+        job_id=row.job_id,
+        status=JobStatus(row.status),
+        message=row.message,
+        error=row.error_message,
+        total_files=extra.get("total_files", 0),
+        processed_files=extra.get("processed_files", row.documents_processed or 0),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -64,12 +118,13 @@ _job_creation_times: dict[str, float] = {}
 # ---------------------------------------------------------------------------
 
 
-def create_job() -> str:
+async def create_job(db: AsyncSession) -> str:
     job_id = str(uuid.uuid4())
-    _jobs[job_id] = JobProgress(job_id=job_id, status=JobStatus.PENDING)
-    _job_logs[job_id] = []
-    _job_creation_times[job_id] = time.time()
-    audit_log.record(
+    row = db_models.Job(job_id=job_id, status="pending")
+    db.add(row)
+    await db.commit()
+    await audit_log.record_async(
+        db,
         "job.created",
         resource_id=job_id,
         resource_type="job",
@@ -78,32 +133,58 @@ def create_job() -> str:
     return job_id
 
 
-def get_job(job_id: str) -> JobProgress | None:
-    return _jobs.get(job_id)
+async def get_job(db: AsyncSession, job_id: str) -> JobProgress | None:
+    row = await db.get(db_models.Job, job_id)
+    if row is None:
+        return None
+    return _row_to_progress(row)
 
 
-def get_report(job_id: str) -> DataHealthReport | None:
-    return _reports.get(job_id)
+async def get_report(db: AsyncSession, job_id: str) -> DataHealthReport | None:
+    row = await db.get(db_models.Report, job_id)
+    if row is None:
+        return None
+    return DataHealthReport.model_validate(row.data)
 
 
-def get_documents(job_id: str) -> list[DocumentMetadata]:
-    return _documents.get(job_id, [])
+async def get_documents(db: AsyncSession, job_id: str) -> list[DocumentMetadata]:
+    result = await db.execute(
+        select(db_models.Document).where(db_models.Document.job_id == job_id)
+    )
+    return [DocumentMetadata.model_validate(r.data) for r in result.scalars()]
 
 
-def get_chunks(job_id: str) -> list[DocumentChunk]:
-    return _chunks.get(job_id, [])
+async def get_chunks(db: AsyncSession, job_id: str) -> list[DocumentChunk]:
+    result = await db.execute(
+        select(db_models.Chunk).where(db_models.Chunk.job_id == job_id)
+    )
+    return [DocumentChunk.model_validate(r.data) for r in result.scalars()]
 
 
-def get_group_analysis(job_id: str) -> GroupAnalysisResult | None:
-    return _group_analysis.get(job_id)
+async def get_group_analysis(db: AsyncSession, job_id: str) -> GroupAnalysisResult | None:
+    row = await db.get(db_models.GroupAnalysis, job_id)
+    if row is None:
+        return None
+    return GroupAnalysisResult.model_validate(row.data)
 
 
-def store_group_analysis(job_id: str, analysis: GroupAnalysisResult) -> None:
-    _group_analysis[job_id] = analysis
+async def store_group_analysis(db: AsyncSession, job_id: str, analysis: GroupAnalysisResult) -> None:
+    row = await db.get(db_models.GroupAnalysis, job_id)
+    if row is None:
+        row = db_models.GroupAnalysis(job_id=job_id, data=analysis.model_dump())
+        db.add(row)
+    else:
+        row.data = analysis.model_dump()
+    await db.commit()
 
 
-def get_logs(job_id: str) -> list[str]:
-    return _job_logs.get(job_id, [])
+async def get_logs(db: AsyncSession, job_id: str) -> list[str]:
+    result = await db.execute(
+        select(db_models.JobLog)
+        .where(db_models.JobLog.job_id == job_id)
+        .order_by(db_models.JobLog.created_at)
+    )
+    return [r.message for r in result.scalars()]
 
 
 def subscribe_job_logs(job_id: str, queue: asyncio.Queue[str]) -> None:
@@ -122,69 +203,87 @@ def unsubscribe_job_logs(job_id: str, queue: asyncio.Queue[str]) -> None:
         _log_subscribers.pop(job_id, None)
 
 
-def list_jobs() -> list[JobProgress]:
-    return list(_jobs.values())
+async def list_jobs(db: AsyncSession) -> list[JobProgress]:
+    result = await db.execute(select(db_models.Job))
+    return [_row_to_progress(r) for r in result.scalars()]
 
 
-def prune_old_jobs() -> int:
+async def prune_old_jobs(db: AsyncSession) -> int:
     """Remove jobs exceeding retention limits. Returns count of pruned jobs."""
     if not settings.max_jobs_retained and not settings.job_max_age_hours:
         return 0
 
-    now = time.time()
-    completed_ids = [
-        jid for jid, j in _jobs.items()
-        if j.status in (JobStatus.COMPLETED, JobStatus.FAILED)
-    ]
+    now = datetime.now(timezone.utc)
+    terminal_statuses = (JobStatus.COMPLETED.value, JobStatus.FAILED.value)
+
+    result = await db.execute(
+        select(db_models.Job).where(db_models.Job.status.in_(terminal_statuses))
+    )
+    completed_jobs: list[db_models.Job] = list(result.scalars())
 
     to_remove: set[str] = set()
 
     # Age-based pruning
     if settings.job_max_age_hours > 0:
         max_age_secs = settings.job_max_age_hours * 3600
-        for jid in completed_ids:
-            created = _job_creation_times.get(jid, now)
-            if (now - created) > max_age_secs:
-                to_remove.add(jid)
+        for job in completed_jobs:
+            created = job.created_at
+            # Ensure timezone-aware comparison
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            age = (now - created).total_seconds()
+            if age > max_age_secs:
+                to_remove.add(job.job_id)
 
     # Count-based pruning (keep the N most recent)
     if settings.max_jobs_retained > 0:
-        remaining = [jid for jid in completed_ids if jid not in to_remove]
-        # Sort by creation time, oldest first
-        remaining.sort(key=lambda jid: _job_creation_times.get(jid, 0))
+        remaining = [j for j in completed_jobs if j.job_id not in to_remove]
+        remaining.sort(key=lambda j: j.created_at)
         excess = len(remaining) - settings.max_jobs_retained
         if excess > 0:
-            to_remove.update(remaining[:excess])
+            for j in remaining[:excess]:
+                to_remove.add(j.job_id)
 
     for jid in to_remove:
-        _jobs.pop(jid, None)
-        _reports.pop(jid, None)
-        _documents.pop(jid, None)
-        _chunks.pop(jid, None)
-        _job_logs.pop(jid, None)
-        _group_analysis.pop(jid, None)
-        _job_creation_times.pop(jid, None)
-        audit_log.record(
+        await db.execute(
+            delete(db_models.Job).where(db_models.Job.job_id == jid)
+        )
+        await audit_log.record_async(
+            db,
             "job.pruned",
             resource_id=jid,
             resource_type="job",
             outcome="success",
         )
 
+    if to_remove:
+        await db.commit()
+
     return len(to_remove)
 
 
-def _log(job_id: str, level: str, msg: str) -> None:
-    """Append a timestamped entry to the in-memory job log and emit to the Python logger."""
+async def _log(job_id: str, level: str, msg: str, db: AsyncSession) -> None:
+    """Persist a log entry to DB, publish to Redis, and push to in-process queues."""
     ts = time.strftime("%H:%M:%S")
     entry = f"[{ts}] [{level}] {msg}"
-    _job_logs.setdefault(job_id, []).append(entry)
+
+    # Persist to DB
+    db.add(db_models.JobLog(job_id=job_id, message=entry))
+    await db.commit()
+
+    # Publish to Redis for cross-process subscribers (e.g. WebSocket in another worker)
+    try:
+        await _get_redis().publish(f"job:{job_id}:logs", entry)
+    except Exception as redis_err:  # noqa: BLE001
+        logger.warning("Redis publish failed for job %s: %s", job_id, redis_err)
+
+    # Push to in-process WebSocket queues
     for queue in list(_log_subscribers.get(job_id, [])):
         try:
             queue.put_nowait(entry)
         except asyncio.QueueFull:
-            # If the frontend isn't keeping up, drop the oldest queued message.
             continue
+
     getattr(logger, level.lower(), logger.info)(msg)
 
 
@@ -193,28 +292,26 @@ def _log(job_id: str, level: str, msg: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def run_pipeline(job_id: str, request: ScanRequest) -> None:
+async def run_pipeline(job_id: str, request: ScanRequest, db: AsyncSession) -> None:
     """Full async pipeline: scan → classify → embed → cluster → report."""
-    job = _jobs[job_id]
-    job.status = JobStatus.RUNNING
-    job.message = "Iniciando escaneo…"
+    await _update_job(db, job_id, status=JobStatus.RUNNING.value, message="Iniciando escaneo…")
 
-    _log(job_id, "INFO", f"Pipeline iniciado para job {job_id}")
-    _log(job_id, "INFO", f"Ruta a escanear: '{request.path}'")
-    _log(job_id, "INFO", f"Opciones — embeddings={request.enable_embeddings}, clustering={request.enable_clustering}, pii={request.enable_pii_detection}")
+    await _log(job_id, "INFO", f"Pipeline iniciado para job {job_id}", db)
+    await _log(job_id, "INFO", f"Ruta a escanear: '{request.path}'", db)
+    await _log(job_id, "INFO", f"Opciones — embeddings={request.enable_embeddings}, clustering={request.enable_clustering}, pii={request.enable_pii_detection}", db)
 
+    temp_scan_root = None
     try:
         # --- Step 1: Fast local indexing ---
         from app.services.scanner import scan_directory_with_stats
 
         loop = asyncio.get_running_loop()
         scan_root = request.path
-        temp_scan_root = None
 
         if request.source_provider != SourceProvider.LOCAL:
             scan_root, temp_scan_root = prepare_scan_source(request)
 
-        _log(job_id, "INFO", f"[Paso 1/5] Escaneando directorio '{scan_root}'…")
+        await _log(job_id, "INFO", f"[Paso 1/5] Escaneando directorio '{scan_root}'…", db)
         t0 = time.monotonic()
         try:
             # Use override values if provided, otherwise fall back to system settings
@@ -225,7 +322,7 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
             denied_mime_types = request.denied_mime_types or settings.denied_mime_types
 
             if request.ingestion_mode or request.allowed_extensions or request.denied_extensions or request.allowed_mime_types or request.denied_mime_types:
-                _log(job_id, "INFO", f"[Sobrescrito] Usando configuración personalizada de filtrado")
+                await _log(job_id, "INFO", f"[Sobrescrito] Usando configuración personalizada de filtrado", db)
 
             result = await asyncio.wait_for(
                 loop.run_in_executor(
@@ -259,7 +356,8 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
 
         # Register filter statistics in audit log
         if filter_stats.get("filters_applied") and filter_stats.get("skipped_by_filter"):
-            audit_log.record(
+            await audit_log.record_async(
+                db,
                 "scan.files_filtered",
                 actor="system",
                 resource_id=job_id,
@@ -269,20 +367,21 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                 skipped_files=filter_stats["skipped_by_filter"][:10],  # Store first 10 for brevity
                 filters_applied=True,
             )
-            _log(
+            await _log(
                 job_id,
                 "INFO",
-                f"Filtrado aplicado: {len(filter_stats['skipped_by_filter'])} archivo(s) excluido(s) por reglas de ingesta."
+                f"Filtrado aplicado: {len(filter_stats['skipped_by_filter'])} archivo(s) excluido(s) por reglas de ingesta.",
+                db,
             )
 
-        job.total_files = len(file_indices)
+        await _update_job(db, job_id, extra={"total_files": len(file_indices), "processed_files": 0})
         unique_files = [f for f in file_indices if not f.is_duplicate]
         dups = len(file_indices) - len(unique_files)
 
-        _log(job_id, "INFO",
+        await _log(job_id, "INFO",
              f"[Paso 1/5] Escaneo completado en {elapsed:.1f}s — "
-             f"total={len(file_indices)}, únicos={len(unique_files)}, duplicados={dups}")
-        job.message = f"Indexados {len(file_indices)} archivos. Filtrando duplicados…"
+             f"total={len(file_indices)}, únicos={len(unique_files)}, duplicados={dups}", db)
+        await _update_job(db, job_id, message=f"Indexados {len(file_indices)} archivos. Filtrando duplicados…")
 
         # --- Step 2: Gemini classification ---
         from app.services import gemini_service
@@ -291,44 +390,55 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
             extract_document_content,
         )
 
-        _log(job_id, "INFO", f"[Paso 2/5] Clasificando {len(unique_files)} archivo(s) con Gemini…")
+        await _log(job_id, "INFO", f"[Paso 2/5] Clasificando {len(unique_files)} archivo(s) con Gemini…", db)
         documents: list[DocumentMetadata] = []
         chunks: list[DocumentChunk] = []
+        non_binary_files = 0  # files attempted for processing (excluding binary-detected files)
 
         for idx, fi in enumerate(unique_files):
-            job.processed_files = idx + 1
-            job.message = f"Clasificando ({idx + 1}/{len(unique_files)}): {fi.name}"
-            _log(job_id, "DEBUG", f"Clasificando [{idx + 1}/{len(unique_files)}]: {fi.path}")
+            await _update_job(
+                db, job_id,
+                message=f"Clasificando ({idx + 1}/{len(unique_files)}): {fi.name}",
+                extra_update={"processed_files": idx + 1},
+            )
+            await _log(job_id, "DEBUG", f"Clasificando [{idx + 1}/{len(unique_files)}]: {fi.path}", db)
 
             extraction = await loop.run_in_executor(None, extract_document_content, fi)
-            _log(
+            await _log(
                 job_id,
                 "DEBUG",
                 f"  → extracción={extraction.extraction_method}, partes={len(extraction.chunks)}",
+                db,
             )
 
             if not extraction.text and not extraction.chunks:
                 reason = f"({extraction.extraction_method})" if extraction.extraction_method not in ("none", "skipped_binary") else ""
                 if extraction.extraction_method == "skipped_binary":
-                    _log(
+                    await _log(
                         job_id,
                         "DEBUG",
                         f"[Paso 2/5] Archivo binario detectado, saltando: {fi.path}",
+                        db,
                     )
                 else:
-                    _log(
+                    non_binary_files += 1  # non-binary but no text — still counts as attempted
+                    await _log(
                         job_id,
                         "INFO",
                         f"[Paso 2/5] Archivo sin texto extraído {reason}, omitiendo clasificación/embedding: {fi.path}",
+                        db,
                     )
                 continue
 
+            non_binary_files += 1
+
             classification_context = build_classification_context(extraction)
             if classification_context:
-                _log(
+                await _log(
                     job_id,
                     "DEBUG",
                     f"  → contexto LLM={len(classification_context)} caracteres",
+                    db,
                 )
 
             doc = await loop.run_in_executor(
@@ -337,8 +447,8 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                 fi,
                 classification_context or extraction.text,
             )
-            _log(job_id, "DEBUG",
-                 f"  → categoría={doc.categoria}, pii={doc.pii_info.detected}")
+            await _log(job_id, "DEBUG",
+                 f"  → categoría={doc.categoria}, pii={doc.pii_info.detected}", db)
             chunks.extend(extraction.chunks)
 
             # --- Step 3: Embeddings ---
@@ -348,11 +458,12 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
 
                 embed_text = _build_embedding_text(doc, extraction.text)
                 if embed_text:
-                    _log(
+                    await _log(
                         job_id,
                         "INFO",
                         f"[Paso 3/5] Embedding documento {doc.documento_id} "
                         f"path={fi.path} chars={len(embed_text)} model={settings.gemini_embedding_model}",
+                        db,
                     )
                     embedding = await loop.run_in_executor(
                         None, embeddings_service.embed_text, embed_text
@@ -367,12 +478,13 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                     chunk_text = _build_chunk_embedding_text(chunk.text)
                     if not chunk_text:
                         continue
-                    _log(
+                    await _log(
                         job_id,
                         "DEBUG",
                         f"[Paso 3/5] Embedding chunk {chunk.chunk_index} "
                         f"documento={doc.documento_id} path={chunk.source_path} "
                         f"chars={len(chunk_text)}",
+                        db,
                     )
                     chunk.embedding = await loop.run_in_executor(
                         None, embeddings_service.embed_text, chunk_text
@@ -392,16 +504,34 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
 
             documents.append(doc)
 
-        _documents[job_id] = documents
-        _chunks[job_id] = chunks
-        _log(job_id, "INFO",
-             f"[Paso 2/5] Clasificación completada — {len(documents)} documento(s) procesados")
+        # Bulk insert documents and chunks into DB
+        for doc in documents:
+            db.add(db_models.Document(
+                documento_id=doc.documento_id,
+                job_id=job_id,
+                data=doc.model_dump(exclude={"embedding"}),
+            ))
+        for chunk in chunks:
+            db.add(db_models.Chunk(
+                chunk_id=chunk.chunk_id,
+                job_id=job_id,
+                documento_id=chunk.documento_id,
+                data=chunk.model_dump(exclude={"embedding"}),
+            ))
+        await db.commit()
+
+        # Correct total_files to reflect only the documents actually processed
+        # (binary files and unextractable files are skipped, so they don't count).
+        await _update_job(db, job_id, extra_update={"total_files": non_binary_files, "processed_files": non_binary_files})
+
+        await _log(job_id, "INFO",
+             f"[Paso 2/5] Clasificación completada — {len(documents)} documento(s) procesados", db)
 
         # --- Step 4: Clustering ---
         clusters = []
         if request.enable_clustering and documents:
-            job.message = "Construyendo clusters semánticos…"
-            _log(job_id, "INFO", "[Paso 3/5] Construyendo clusters semánticos…")
+            await _update_job(db, job_id, message="Construyendo clusters semánticos…")
+            await _log(job_id, "INFO", "[Paso 3/5] Construyendo clusters semánticos…", db)
             from app.services.clustering_service import build_clusters, detect_inconsistencies
             from app.db import vector_store
 
@@ -414,7 +544,7 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                     chroma_data = await loop.run_in_executor(
                         None, vector_store.get_all_embeddings, "document"
                     )
-                _log(job_id, "DEBUG", f"  → {len(chroma_data)} embeddings recuperados de ChromaDB")
+                await _log(job_id, "DEBUG", f"  → {len(chroma_data)} embeddings recuperados de ChromaDB", db)
 
             clusters = await loop.run_in_executor(
                 None, build_clusters, documents, chroma_data
@@ -422,20 +552,21 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
             clusters = await loop.run_in_executor(
                 None, detect_inconsistencies, clusters, documents
             )
-            _log(job_id, "INFO", f"[Paso 3/5] Clustering completado — {len(clusters)} cluster(s)")
+            await _log(job_id, "INFO", f"[Paso 3/5] Clustering completado — {len(clusters)} cluster(s)", db)
         else:
-            _log(job_id, "INFO", "[Paso 3/5] Clustering omitido (deshabilitado o sin documentos)")
+            await _log(job_id, "INFO", "[Paso 3/5] Clustering omitido (deshabilitado o sin documentos)", db)
 
         # --- Step 5: Build health report ---
-        job.message = "Generando reporte de salud de datos…"
-        _log(job_id, "INFO", "[Paso 4/6] Generando reporte de salud de datos…")
+        await _update_job(db, job_id, message="Generando reporte de salud de datos…")
+        await _log(job_id, "INFO", "[Paso 4/6] Generando reporte de salud de datos…", db)
         report = _build_report(job_id, file_indices, documents, clusters)
-        _reports[job_id] = report
+        db.add(db_models.Report(job_id=job_id, data=report.model_dump()))
+        await db.commit()
 
-        # --- Step 5: Group analysis ---
+        # --- Step 6: Group analysis ---
         if documents:
-            job.message = "Analizando grupos de directorio…"
-            _log(job_id, "INFO", "[Paso 5/6] Analizando grupos de directorio…")
+            await _update_job(db, job_id, message="Analizando grupos de directorio…")
+            await _log(job_id, "INFO", "[Paso 5/6] Analizando grupos de directorio…", db)
             from app.services.grouping_service import analyze_all_groups
 
             group_analysis = await loop.run_in_executor(
@@ -446,30 +577,37 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
                 request.group_mode,
                 10,
             )
-            store_group_analysis(job_id, group_analysis)
-            _log(job_id, "INFO", f"[Paso 5/6] Group analysis completado — {group_analysis.group_count} grupos")
+            await store_group_analysis(db, job_id, group_analysis)
+            await _log(job_id, "INFO", f"[Paso 5/6] Group analysis completado — {group_analysis.group_count} grupos", db)
         else:
-            _log(job_id, "INFO", "[Paso 5/6] No hay documentos para análisis de grupos")
+            await _log(job_id, "INFO", "[Paso 5/6] No hay documentos para análisis de grupos", db)
 
-        job.status = JobStatus.COMPLETED
-        job.message = "Análisis completado."
-        _log(job_id, "INFO", f"[Paso 6/6] Job {job_id} completado exitosamente ✓")
-        audit_log.record(
+        job_after = await _load_job_progress(db, job_id)
+        total_files = (job_after.total_files if job_after else None) or len(file_indices)
+
+        await _update_job(db, job_id, status=JobStatus.COMPLETED.value, message="Análisis completado.")
+        await _log(job_id, "INFO", f"[Paso 6/6] Job {job_id} completado exitosamente ✓", db)
+        await audit_log.record_async(
+            db,
             "job.completed",
             resource_id=job_id,
             resource_type="job",
             path=request.path,
             source_provider=request.source_provider.value,
-            total_files=job.total_files,
+            total_files=total_files,
         )
 
     except Exception as exc:  # noqa: BLE001
-        _log(job_id, "ERROR", f"Job {job_id} falló: {exc!r}")
+        await _log(job_id, "ERROR", f"Job {job_id} falló: {exc!r}", db)
         logger.exception("Job %s failed", job_id)
-        job.status = JobStatus.FAILED
-        job.error = repr(exc)
-        job.message = "Error durante el análisis."
-        audit_log.record(
+        await _update_job(
+            db, job_id,
+            status=JobStatus.FAILED.value,
+            error_message=repr(exc),
+            message="Error durante el análisis.",
+        )
+        await audit_log.record_async(
+            db,
             "job.failed",
             resource_id=job_id,
             resource_type="job",

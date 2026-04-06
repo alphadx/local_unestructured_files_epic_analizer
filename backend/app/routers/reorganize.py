@@ -4,8 +4,10 @@ import logging
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import get_db
 from app.services import audit_log, job_manager
 
 logger = logging.getLogger(__name__)
@@ -14,7 +16,7 @@ router = APIRouter(prefix="/api/reorganize", tags=["reorganize"])
 
 
 @router.post("/{job_id}/execute")
-async def execute_reorganization(job_id: str) -> dict:
+async def execute_reorganization(job_id: str, db: AsyncSession = Depends(get_db)) -> dict:
     """
     Execute the reorganisation plan suggested by the analysis.
 
@@ -23,7 +25,7 @@ async def execute_reorganization(job_id: str) -> dict:
 
     Returns a summary of moved files.
     """
-    report = job_manager.get_report(job_id)
+    report = await job_manager.get_report(db, job_id)
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
 

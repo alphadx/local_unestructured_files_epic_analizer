@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from app.db import vector_store
 from app.models.schemas import (
@@ -17,6 +18,9 @@ from app.models.schemas import (
 from app.services import embeddings_service
 from app.services.analytics_service import normalize_directory, normalize_extension
 from app.services import job_manager
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 _MAX_SNIPPET_CHARS = 240
 
@@ -135,13 +139,17 @@ def _result_from_chunk(
     )
 
 
-def search_corpus(request: SearchRequest) -> SearchResponse:
+async def search_corpus(request: SearchRequest, db: AsyncSession) -> SearchResponse:
     if request.job_id:
-        documents = job_manager.get_documents(request.job_id)
-        chunks = job_manager.get_chunks(request.job_id)
+        documents = await job_manager.get_documents(db, request.job_id)
+        chunks = await job_manager.get_chunks(db, request.job_id)
     else:
-        documents = [doc for job in job_manager.list_jobs() for doc in job_manager.get_documents(job.job_id)]
-        chunks = [chunk for job in job_manager.list_jobs() for chunk in job_manager.get_chunks(job.job_id)]
+        jobs = await job_manager.list_jobs(db)
+        documents = []
+        chunks = []
+        for job in jobs:
+            documents.extend(await job_manager.get_documents(db, job.job_id))
+            chunks.extend(await job_manager.get_chunks(db, job.job_id))
 
     if request.job_id and not documents:
         return SearchResponse(query=request.query, job_id=request.job_id, total_results=0)
