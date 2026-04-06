@@ -77,6 +77,7 @@ export default function Home() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [isLoadingSimilarities, setIsLoadingSimilarities] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
@@ -141,6 +142,16 @@ export default function Home() {
       setIsLoadingGroups(false);
     }
   }, []);
+
+  const handleLoadGroupSimilarities = useCallback(async (groupId: string) => {
+    if (!job) throw new Error("Job not found");
+    setIsLoadingSimilarities(true);
+    try {
+      return await getGroupSimilarities(job.job_id, groupId);
+    } finally {
+      setIsLoadingSimilarities(false);
+    }
+  }, [job]);
 
   const parseBackendValidationErrors = (err: unknown): Record<string, string> | null => {
     const axiosError = err as { response?: any };
@@ -690,7 +701,7 @@ export default function Home() {
                   <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
                     <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Carga de análisis</p>
                     <p className="mt-2 text-3xl font-semibold text-slate-900">
-                      {isLoadingGroups ? "Cargando..." : groupAnalysis ? "Listo" : "Pendiente"}
+                      {isLoadingGroups ? "Cargando..." : groupAnalysis ? "Listo" : isLoadingSimilarities ? "Cargando similitudes..." : "Pendiente"}
                     </p>
                   </div>
                 </div>
@@ -704,15 +715,7 @@ export default function Home() {
                 <GroupAnalysis
                   analysis={groupAnalysis}
                   isLoading={isLoadingGroups}
-                  onLoadSimilarities={async (groupId) => {
-                    if (!job) throw new Error("Job not found");
-                    setIsLoadingGroups(true);
-                    try {
-                      return await getGroupSimilarities(job.job_id, groupId);
-                    } finally {
-                      setIsLoadingGroups(false);
-                    }
-                  }}
+                  onLoadSimilarities={handleLoadGroupSimilarities}
                 />
               </div>
             )}
