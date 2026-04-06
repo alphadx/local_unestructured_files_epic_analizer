@@ -137,6 +137,7 @@ External:  Google Gemini API (Flash + embeddings)
 ## Funcionalidades
 
 ### Estado actual
+- **[NUEVO ✨ FASE 2]** Migración completa de store in-memory a **PostgreSQL** con SQLAlchemy async ORM y migraciones Alembic. Procesamiento asíncrono con **Celery + Redis** (workers, Flower monitoring). 174 tests pasando. Ver [019_fase2_postgresql_celery.md](DOCS/avances/019_fase2_postgresql_celery.md).
 - Navegación por familias de clusters y selección de cluster individual en el dashboard.
 - Vista de análisis por grupos de directorio con perfiles, alertas, recomendaciones y similitud entre grupos.
 - API de reportes con estadísticas, exploración de corpus, exportación, comparación de scans y análisis de grupos.
@@ -809,36 +810,24 @@ Documento completo con:
 - [x] **Mapa de calor temporal**: distribución de archivos por fecha de emisión/modificación
 - [x] **Grafo de relaciones**: visualización de conexiones factura ↔ OT ↔ licitación (D3 force-directed graph interactivo)
 
-### ✅ Fase 3 — Persistencia y escala — INVESTIGACIÓN COMPLETADA
+### ✅ Fase 3 — Persistencia y escala — IMPLEMENTADO
 
-**Estado**: 🔬 **INVESTIGACIÓN COMPLETADA** — Documento detallado disponible en [DOCS/avances/009_investigacion_persistencia_escalabilidad.md](DOCS/avances/009_investigacion_persistencia_escalabilidad.md)
+**Estado**: ✅ **IMPLEMENTADO Y PROBADO** — Documento detallado: [DOCS/avances/019_fase2_postgresql_celery.md](DOCS/avances/019_fase2_postgresql_celery.md)
 
-**Resumen ejecutivo**:
-- PostgreSQL como BD relacional (vs SQLite, MongoDB, etc.)
-- Celery + Redis para task queue y procesamiento paralelo
-- Schema propuesto: 5 tablas (jobs, documents, entities, clusters, audit_log, search_cache)
-- Alternativas analizadas: APScheduler, Kubernetes Jobs, AWS SQS+Lambda
-- **Roadmap de 3 fases**:
-  - **Fase 1** (1-2 sprints): Persistencia PostgreSQL sin cambiar processing
-  - **Fase 2** (1-2 sprints): Celery básico con Redis, 4-6 workers
-  - **Fase 3** (2-3 sprints): Auto-scaling, multi-queue, monitoreo centralizado
+**Resumen**:
+- PostgreSQL como BD relacional con SQLAlchemy async ORM y migraciones Alembic
+- Celery + Redis para procesamiento paralelo con Flower monitoring
+- 174 tests pasando (0 fallos) con SQLite como BD de tests
 
-**Costo/Beneficio**:
-- Fase 1: $55-80/mes dev, +persistencia e histórico
-- Fase 2: +$100-150 infra, pero 2-3x speedup en classification
-- Fase 3: $1,250-2,000/mes prod, pero escala a 1M+ documentos/mes
-
-Documento completo con:
-- ✅ Comparativa PostgreSQL vs alternativas (MySQL, MongoDB, Redis, Cassandra, DynamoDB)
-- ✅ Schema relacional propuesto con 6 tablas e índices
-- ✅ Celery architecture: brokers (Redis vs RabbitMQ), workers, result backends
-- ✅ Ejemplos de código: task decorators, celery workflow, docker-compose
-- ✅ Alternativas: APScheduler, K8s Jobs, Serverless SQS+Lambda
-- ✅ Comparativa 4 arquitecturas (in-memory vs PG+Celery vs K8s vs Serverless)
-- ✅ Casos de uso: pipeline paralelo, corpus masivos, monitoreo de progreso
-- ✅ Stack recomendado: Docker Compose + Flower
-- ✅ Consideraciones de seguridad, monitoreo, costos
-- ✅ Referencias y tutoriales
+**Implementado**:
+- ✅ Schema PostgreSQL: 7 tablas (`jobs`, `documents`, `chunks`, `named_entities`, `audit_log`, `search_cache`, `job_logs`)
+- ✅ PKs compuestas en `documents` y `chunks` para soporte multi-job
+- ✅ Alembic migrations versionadas
+- ✅ SQLAlchemy ORM models async (`AsyncSession`, `AsyncEngine`)
+- ✅ Store in-memory reemplazado completamente por BD queries
+- ✅ Todos los endpoints inyectan `db: AsyncSession = Depends(get_db)`
+- ✅ Redis broker + Celery worker + Flower en docker-compose
+- ✅ Test infrastructure: SQLite + fixtures de limpieza por-test
 
 - [x] Exportación a CSV / JSON del inventario completo de documentos
 
