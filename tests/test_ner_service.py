@@ -162,24 +162,26 @@ class TestBuildContactsReport:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(
-    reason="TestContactsEndpoint relies on the Phase 1 in-memory job_manager._jobs "
-    "and ._documents dicts which were removed in Phase 2 (replaced by PostgreSQL). "
-    "Needs rewrite to insert test data via DB session."
-)
+# ---------------------------------------------------------------------------
+# /api/reports/{job_id}/contacts endpoint
+# ---------------------------------------------------------------------------
+
+
 class TestContactsEndpoint:
+    """
+    Tests for GET /api/reports/{job_id}/contacts — Phase 2 rewrite.
+    Seeds the test DB directly using run_with_test_db from conftest.
+    """
+
     @pytest.fixture
     def client_with_job(self, tmp_path):
+        """Seed a completed job + one document with two named entities in the test DB."""
         from app.main import app
-        from app.services import job_manager
-        from app.models.schemas import JobStatus
+        from app.db import models as db_models
+        from conftest import run_with_test_db
 
         job_id = "test-ner-job"
-        # Bootstrap a completed job with two documents
-        job_manager._jobs[job_id] = job_manager.JobProgress(
-            job_id=job_id,
-            status=JobStatus.COMPLETED,
-        )
+
         email_ent = NamedEntity(
             entity_type=NamedEntityType.EMAIL, value="test@corp.cl", confidence=1.0, source="regex"
         )
@@ -200,14 +202,21 @@ class TestContactsEndpoint:
             file_index=fi,
             named_entities=[email_ent, org_ent],
         )
-        job_manager._documents[job_id] = [doc]
+
+        async def _seed(db):
+            db.add(db_models.Job(job_id=job_id, status="completed"))
+            await db.flush()
+            db.add(db_models.Document(
+                job_id=job_id,
+                documento_id="sha-test",
+                data=doc.model_dump(mode="json"),
+            ))
+            await db.commit()
+
+        run_with_test_db(_seed)
 
         with TestClient(app) as c:
             yield c, job_id
-
-        # Cleanup
-        job_manager._jobs.pop(job_id, None)
-        job_manager._documents.pop(job_id, None)
 
     def test_contacts_returns_all_entities(self, client_with_job):
         client, job_id = client_with_job
@@ -236,3 +245,4 @@ class TestContactsEndpoint:
         client, _ = client_with_job
         resp = client.get("/api/reports/nonexistent-job/contacts")
         assert resp.status_code == 404
+

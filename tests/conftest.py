@@ -97,6 +97,17 @@ def override_get_db():
     audit_log_module.AsyncSessionLocal = _orig_session_local  # type: ignore[attr-defined]
 
 
+def run_with_test_db(async_fn):
+    """Run ``async_fn(db)`` with a fresh test DB session. Safe to call from sync test code."""
+    import asyncio
+
+    async def _wrapper():
+        async with _TestSessionLocal() as db:
+            return await async_fn(db)
+
+    return asyncio.run(_wrapper())
+
+
 @pytest.fixture(autouse=True)
 def patch_celery_task(monkeypatch):
     """
