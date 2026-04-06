@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_db
 
 from app.models.schemas import (
     ContactsReport,
@@ -13,6 +16,7 @@ from app.models.schemas import (
     GroupSimilarityResponse,
     JobStatistics,
     NamedEntityType,
+    NamedEntityType,
     ScanComparisonResponse,
 )
 from app.services.analytics_service import build_corpus_exploration, build_job_statistics
@@ -23,15 +27,16 @@ from app.services.executive_summary_service import (
 )
 from app.services.export_service import documents_to_csv, documents_to_json_payload
 from app.services.ner_service import build_contacts_report
+from app.services.ner_service import build_contacts_report
 from app.services import job_manager
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
 @router.get("/{job_id}", response_model=DataHealthReport)
-async def get_report(job_id: str) -> DataHealthReport:
+async def get_report(job_id: str, db: AsyncSession = Depends(get_db)) -> DataHealthReport:
     """Return the full health report for a completed job."""
-    report = job_manager.get_report(job_id)
+    report = await job_manager.get_report(db, job_id)
     if report is None:
         raise HTTPException(
             status_code=404,
@@ -41,69 +46,69 @@ async def get_report(job_id: str) -> DataHealthReport:
 
 
 @router.get("/{job_id}/documents", response_model=list[DocumentMetadata])
-async def get_documents(job_id: str) -> list[DocumentMetadata]:
+async def get_documents(job_id: str, db: AsyncSession = Depends(get_db)) -> list[DocumentMetadata]:
     """Return the list of classified documents for a job."""
-    job = job_manager.get_job(job_id)
+    job = await job_manager.get_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job_manager.get_documents(job_id)
+    return await job_manager.get_documents(db, job_id)
 
 
 @router.get("/{job_id}/chunks", response_model=list[DocumentChunk])
-async def get_chunks(job_id: str) -> list[DocumentChunk]:
+async def get_chunks(job_id: str, db: AsyncSession = Depends(get_db)) -> list[DocumentChunk]:
     """Return the extracted semantic chunks for a job."""
-    job = job_manager.get_job(job_id)
+    job = await job_manager.get_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job_manager.get_chunks(job_id)
+    return await job_manager.get_chunks(db, job_id)
 
 
 @router.get("/{job_id}/statistics", response_model=JobStatistics)
-async def get_statistics(job_id: str) -> JobStatistics:
+async def get_statistics(job_id: str, db: AsyncSession = Depends(get_db)) -> JobStatistics:
     """
     Return detailed distribution statistics for a completed analysis job.
 
     Includes breakdown by file extension, document category, PII risk level,
     and a summary of each semantic cluster with its inconsistency count.
     """
-    report = job_manager.get_report(job_id)
+    report = await job_manager.get_report(db, job_id)
     if report is None:
         raise HTTPException(
             status_code=404,
             detail="Statistics not available. Job may still be running or does not exist.",
         )
 
-    documents = job_manager.get_documents(job_id)
+    documents = await job_manager.get_documents(db, job_id)
     return build_job_statistics(job_id, report, documents)
 
 
 @router.get("/{job_id}/exploration", response_model=CorpusExplorationReport)
-async def get_exploration(job_id: str) -> CorpusExplorationReport:
+async def get_exploration(job_id: str, db: AsyncSession = Depends(get_db)) -> CorpusExplorationReport:
     """Return corpus exploration metrics and pattern summaries."""
-    report = job_manager.get_report(job_id)
+    report = await job_manager.get_report(db, job_id)
     if report is None:
         raise HTTPException(
             status_code=404,
             detail="Exploration not available. Job may still be running or does not exist.",
         )
 
-    documents = job_manager.get_documents(job_id)
+    documents = await job_manager.get_documents(db, job_id)
     return build_corpus_exploration(job_id, report, documents)
 
 
 @router.get("/{job_id}/groups", response_model=GroupAnalysisResult)
-async def get_groups(job_id: str) -> GroupAnalysisResult:
+async def get_groups(job_id: str, db: AsyncSession = Depends(get_db)) -> GroupAnalysisResult:
     """
     Return the directory group analysis for a completed job.
 
     Includes all detected groups with their feature profiles, health scores,
     and top k similarities between groups.
     """
-    job = job_manager.get_job(job_id)
+    job = await job_manager.get_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    analysis = job_manager.get_group_analysis(job_id)
+    analysis = await job_manager.get_group_analysis(db, job_id)
     if analysis is None:
         raise HTTPException(
             status_code=404,
@@ -116,14 +121,14 @@ async def get_groups(job_id: str) -> GroupAnalysisResult:
 @router.get(
     "/{job_id}/groups/{group_id}/similarity", response_model=GroupSimilarityResponse
 )
-async def get_group_similarity(job_id: str, group_id: str) -> GroupSimilarityResponse:
+async def get_group_similarity(job_id: str, group_id: str, db: AsyncSession = Depends(get_db)) -> GroupSimilarityResponse:
     """
     Return similar groups for a given group.
 
     Filters the computed similarities to show only those involving the specified group,
     ranked by composite similarity score.
     """
-    analysis = job_manager.get_group_analysis(job_id)
+    analysis = await job_manager.get_group_analysis(db, job_id)
     if analysis is None:
         raise HTTPException(
             status_code=404,
@@ -157,13 +162,13 @@ async def get_group_similarity(job_id: str, group_id: str) -> GroupSimilarityRes
 
 
 @router.get("/{job_id}/export/json")
-async def export_documents_json(job_id: str) -> JSONResponse:
+async def export_documents_json(job_id: str, db: AsyncSession = Depends(get_db)) -> JSONResponse:
     """Export full document inventory as JSON."""
-    job = job_manager.get_job(job_id)
+    job = await job_manager.get_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    documents = job_manager.get_documents(job_id)
+    documents = await job_manager.get_documents(db, job_id)
     payload = {
         "job_id": job_id,
         "total_documents": len(documents),
@@ -173,13 +178,13 @@ async def export_documents_json(job_id: str) -> JSONResponse:
 
 
 @router.get("/{job_id}/export/csv")
-async def export_documents_csv(job_id: str) -> PlainTextResponse:
+async def export_documents_csv(job_id: str, db: AsyncSession = Depends(get_db)) -> PlainTextResponse:
     """Export full document inventory as CSV."""
-    job = job_manager.get_job(job_id)
+    job = await job_manager.get_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    documents = job_manager.get_documents(job_id)
+    documents = await job_manager.get_documents(db, job_id)
     csv_content = documents_to_csv(documents)
 
     headers = {
@@ -206,17 +211,18 @@ async def compare_job_scans(
         le=2000,
         description="Maximum number of items returned per change bucket.",
     ),
+    db: AsyncSession = Depends(get_db),
 ) -> ScanComparisonResponse:
     """Compare two completed scans and detect new/modified/deleted files."""
-    if job_manager.get_job(base_job_id) is None:
+    if await job_manager.get_job(db, base_job_id) is None:
         raise HTTPException(status_code=404, detail=f"Base job {base_job_id} not found")
-    if job_manager.get_job(target_job_id) is None:
+    if await job_manager.get_job(db, target_job_id) is None:
         raise HTTPException(
             status_code=404, detail=f"Target job {target_job_id} not found"
         )
 
-    base_documents = job_manager.get_documents(base_job_id)
-    target_documents = job_manager.get_documents(target_job_id)
+    base_documents = await job_manager.get_documents(db, base_job_id)
+    target_documents = await job_manager.get_documents(db, target_job_id)
 
     return compare_scans(
         base_job_id=base_job_id,
@@ -278,16 +284,17 @@ async def get_executive_summary_pdf(
         default=True,
         description="If true, tries to refine summary text with Gemini.",
     ),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Generate and download an executive summary PDF for a completed job."""
-    report = job_manager.get_report(job_id)
+    report = await job_manager.get_report(db, job_id)
     if report is None:
         raise HTTPException(
             status_code=404,
             detail="Report not found. Job may still be running or does not exist.",
         )
 
-    documents = job_manager.get_documents(job_id)
+    documents = await job_manager.get_documents(db, job_id)
     summary_text = build_executive_summary_text(
         job_id=job_id,
         report=report,

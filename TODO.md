@@ -56,8 +56,8 @@
 
 - ~~Revisar si la configuración de filtrado debe exponerse también en frontend.~~ ✅ **COMPLETADO** — Componente `FilterConfiguration` en frontend; endpoint `/api/admin/filter-config` expone configuración actual.
 - [ ] Evaluar si las reglas de `mime_type` y extensiones deben quedar reflejadas en la guía de despliegue.
-- [ ] **PostgreSQL**: Reemplazar el store en memoria por PostgreSQL (estado de jobs y documentos).
-- [ ] **Celery + Redis**: Cola de tareas para procesamiento paralelo de corpus grandes.
+- ~~**PostgreSQL**: Reemplazar el store en memoria por PostgreSQL (estado de jobs y documentos).~~ ✅ **COMPLETADO** — Ver [019_fase2_postgresql_celery.md](DOCS/avances/019_fase2_postgresql_celery.md). SQLAlchemy async ORM, Alembic migrations, 7 tablas, PKs compuestas.
+- ~~**Celery + Redis**: Cola de tareas para procesamiento paralelo de corpus grandes.~~ ✅ **COMPLETADO** — Ver [019_fase2_postgresql_celery.md](DOCS/avances/019_fase2_postgresql_celery.md). Celery worker, Redis broker, Flower monitoring, docker-compose actualizado.
 
 ## Intelligent Execution Layer
 
@@ -221,9 +221,10 @@
 ### ✅ Fase 3 — Documentación y experiencia (COMPLETADO)
 - Ejemplos de uso exhaustivos (USAGE_EXAMPLES.md), integraciones remotas (Google Drive, SharePoint), filtrado configurable en frontend.
 
-### Fase 4 — Persistencia y escala (_EN INVESTIGACIÓN_)
-- [ ] Reemplazar store en memoria por PostgreSQL.
-- [ ] Implementar cola async con Celery + Redis.
+### ✅ Fase 4 — Persistencia y escala (COMPLETADO)
+**Documento**: [019_fase2_postgresql_celery.md](DOCS/avances/019_fase2_postgresql_celery.md)
+- [x] Reemplazar store en memoria por PostgreSQL (SQLAlchemy async ORM, Alembic, 7 tablas, PKs compuestas).
+- [x] Implementar cola async con Celery + Redis (workers, Flower monitoring, docker-compose).
 
 ### Fase 5 — Inteligencia avanzada (_EN INVESTIGACIÓN_)
 - [x] **NER generalizado y base de datos de contactos** — Fase 1 implementada: `ner_service.py`, `named_entities` en `DocumentMetadata`, endpoint `/api/reports/{job_id}/contacts`.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import secrets
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,27 @@ logging.basicConfig(
 
 _logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create DB tables on startup (idempotent; Alembic handles production migrations)."""
+    from app.db.session import create_tables
+
+    try:
+        await create_tables()
+        _logger.info("Database tables verified/created.")
+    except Exception as exc:
+        _logger.warning("Could not initialise database: %s", exc)
+
+    yield
+
+    # Graceful shutdown: close the async engine connection pool.
+    from app.db.session import engine
+
+    await engine.dispose()
+    _logger.info("Database connection pool closed.")
+
+
 app = FastAPI(
     title="Analizador de Archivos No Estructurados",
     description=(
@@ -26,6 +48,7 @@ app = FastAPI(
         "genera embeddings y construye clusters semánticos."
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

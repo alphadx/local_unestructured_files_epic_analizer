@@ -2,77 +2,94 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect, status
+import redis.asyncio as aioredis
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
+from app.db.session import get_db
 from app.models.schemas import JobProgress, ScanRequest
 from app.services import job_manager
+from app.workers.tasks import run_analysis_pipeline
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 
 @router.post("", response_model=JobProgress, status_code=202)
-async def start_scan(request: ScanRequest, background_tasks: BackgroundTasks) -> JobProgress:
+async def start_scan(request: ScanRequest, db: AsyncSession = Depends(get_db)) -> JobProgress:
     """
-    Kick off a new analysis job for the specified directory path.
-
-    The job runs in the background; poll ``GET /api/jobs/{job_id}`` for status.
+    Kick off a new analysis job. Dispatches to Celery worker.
+    Poll ``GET /api/jobs/{job_id}`` for status.
     """
-    job_id = job_manager.create_job()
-    background_tasks.add_task(job_manager.run_pipeline, job_id, request)
-    return job_manager.get_job(job_id)  # type: ignore[return-value]
+    job_id = await job_manager.create_job(db)
+    run_analysis_pipeline.delay(job_id, request.model_dump(mode="json"))
+    return await job_manager.get_job(db, job_id)  # type: ignore[return-value]
 
 
 @router.get("", response_model=list[JobProgress])
-async def list_jobs() -> list[JobProgress]:
-    return job_manager.list_jobs()
+async def list_jobs(db: AsyncSession = Depends(get_db)) -> list[JobProgress]:
+    return await job_manager.list_jobs(db)
 
 
 @router.get("/{job_id}", response_model=JobProgress)
-async def get_job(job_id: str) -> JobProgress:
-    job = job_manager.get_job(job_id)
+async def get_job(job_id: str, db: AsyncSession = Depends(get_db)) -> JobProgress:
+    job = await job_manager.get_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 
 @router.get("/{job_id}/logs", response_model=list[str])
-async def get_job_logs(job_id: str) -> list[str]:
-    """Return the timestamped in-memory log for a job (all entries since creation)."""
-    if job_manager.get_job(job_id) is None:
+async def get_job_logs(job_id: str, db: AsyncSession = Depends(get_db)) -> list[str]:
+    """Return the full log history for a job from the database."""
+    if await job_manager.get_job(db, job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job_manager.get_logs(job_id)
+    return await job_manager.get_logs(db, job_id)
 
 
 @router.websocket("/{job_id}/logs/ws")
 async def job_log_websocket(job_id: str, websocket: WebSocket) -> None:
-    if job_manager.get_job(job_id) is None:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
+    """
+    Stream live log entries for a running job via WebSocket.
 
-    await websocket.accept()
-    queue: asyncio.Queue[str] = asyncio.Queue()
-    job_manager.subscribe_job_logs(job_id, queue)
+    Replays historical logs first, then subscribes to Redis pub/sub for
+    real-time entries published by the Celery worker.
+    """
+    from app.db.session import AsyncSessionLocal
 
-    try:
-        for line in job_manager.get_logs(job_id):
+    async with AsyncSessionLocal() as db:
+        if await job_manager.get_job(db, job_id) is None:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        await websocket.accept()
+
+        # Replay existing logs
+        historical = await job_manager.get_logs(db, job_id)
+        for line in historical:
             await websocket.send_text(line)
 
-        while True:
-            entry = await queue.get()
-            await websocket.send_text(entry)
+    # Subscribe to Redis pub/sub for real-time entries
+    redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+    pubsub = redis_client.pubsub()
+    await pubsub.subscribe(f"job:{job_id}:logs")
+
+    try:
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                await websocket.send_text(message["data"])
     except WebSocketDisconnect:
         pass
+    except Exception:
+        pass
     finally:
-        job_manager.unsubscribe_job_logs(job_id, queue)
+        await pubsub.unsubscribe(f"job:{job_id}:logs")
+        await pubsub.close()
+        await redis_client.aclose()
 
 
 @router.post("/prune", status_code=200)
-async def prune_jobs() -> dict:
-    """
-    Manually trigger job pruning based on the configured retention policy.
-
-    Removes completed/failed jobs that exceed ``max_jobs_retained`` or
-    ``job_max_age_hours`` settings. Returns the number of jobs pruned.
-    """
-    pruned = job_manager.prune_old_jobs()
+async def prune_jobs(db: AsyncSession = Depends(get_db)) -> dict:
+    """Manually trigger job pruning based on the configured retention policy."""
+    pruned = await job_manager.prune_old_jobs(db)
     return {"pruned": pruned}

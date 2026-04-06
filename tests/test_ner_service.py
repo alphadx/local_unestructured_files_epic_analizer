@@ -195,7 +195,18 @@ class TestContactsEndpoint:
             file_index=fi,
             named_entities=[email_ent, org_ent],
         )
-        job_manager._documents[job_id] = [doc]
+
+        async def _seed(db):
+            db.add(db_models.Job(job_id=job_id, status="completed"))
+            await db.flush()
+            db.add(db_models.Document(
+                job_id=job_id,
+                documento_id="sha-test",
+                data=doc.model_dump(mode="json"),
+            ))
+            await db.commit()
+
+        run_with_test_db(_seed)
 
         with TestClient(app) as c:
             yield c, job_id

@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     sharepoint_site_id: str = ""
     sharepoint_drive_id: str = ""
 
+    # PostgreSQL – Phase 2
+    database_url: str = "sqlite+aiosqlite:///./analyzer.db"
+
+    # Redis – Phase 2 (broker + pub/sub)
+    redis_url: str = "redis://localhost:6379/0"
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://frontend:3000"]
     cors_allow_credentials: bool = False

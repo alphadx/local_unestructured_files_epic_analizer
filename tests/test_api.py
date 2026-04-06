@@ -142,7 +142,7 @@ class TestJobsEndpoint:
     def test_start_scan_passes_filter_overrides_to_pipeline(self, tmp_path, monkeypatch):
         captured: dict[str, object] = {}
 
-        async def fake_run_pipeline(job_id, request):
+        async def fake_run_pipeline(job_id, request, db=None):
             captured["job_id"] = job_id
             captured["request"] = request
 
@@ -424,9 +424,9 @@ class TestE2EBinaryDetection:
         assert stats_resp.status_code == 200
         stats_data = stats_resp.json()
         assert stats_data["total_files"] == 2
-        assert "size_bucket_distribution" in stats
-        assert "directory_breakdown" in stats
-        assert "semantic_coverage" in stats
+        assert "size_bucket_distribution" in stats_data
+        assert "directory_breakdown" in stats_data
+        assert "semantic_coverage" in stats_data
 
     def test_exploration_endpoint_returns_pattern_summary(self, tmp_path):
         (tmp_path / "a.txt").write_text("uno", encoding="utf-8")

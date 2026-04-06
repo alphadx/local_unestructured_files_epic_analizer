@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import sys
 import time
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -103,8 +104,7 @@ client = TestClient(app)
 
 class TestAuditEndpoint:
     def setup_method(self):
-        """Clear the audit log before each test."""
-        _audit_log_module._audit_log.clear()
+        """Cleanup is handled by conftest.py clean_tables fixture (no-op here)."""
 
     def test_audit_endpoint_returns_empty_when_no_entries(self):
         response = client.get("/api/audit")
@@ -200,93 +200,155 @@ class TestAuditEndpoint:
 # ---------------------------------------------------------------------------
 
 
-class TestJobRetention:
-    def setup_method(self):
-        """Clear job stores before each test."""
-        job_manager._jobs.clear()
-        job_manager._reports.clear()
-        job_manager._documents.clear()
-        job_manager._chunks.clear()
-        job_manager._job_logs.clear()
-        job_manager._group_analysis.clear()
-        job_manager._job_creation_times.clear()
+# ---------------------------------------------------------------------------
+# Job Retention / prune_old_jobs
+# ---------------------------------------------------------------------------
 
-    def _create_completed_job(self, age_seconds: float = 0) -> str:
-        from app.models.schemas import JobStatus
-        job_id = job_manager.create_job()
-        job_manager._jobs[job_id].status = JobStatus.COMPLETED
-        # Backdate creation time
-        job_manager._job_creation_times[job_id] = time.time() - age_seconds
-        return job_id
+
+class TestJobRetention:
+    """
+    Phase 2 rewrite: tests for prune_old_jobs(db) using the async DB-backed implementation.
+
+    Jobs are seeded directly into the SQLite test DB via run_with_test_db().
+    created_at is backdated to simulate old jobs.
+    prune_old_jobs(db) is called via asyncio.run() with a fresh test DB session.
+    Audit entries are verified via GET /api/audit.
+    """
+
+    def _seed_job(self, job_id: str, status: str = "completed", age_seconds: float = 0) -> None:
+        """Insert a job into the test DB with an optionally backdated created_at."""
+        from app.db import models as db_models
+        from conftest import run_with_test_db
+
+        created_at = datetime.now(timezone.utc) - timedelta(seconds=age_seconds)
+
+        async def _insert(db):
+            db.add(db_models.Job(
+                job_id=job_id,
+                status=status,
+                created_at=created_at,
+                updated_at=created_at,
+            ))
+            await db.commit()
+
+        run_with_test_db(_insert)
+
+    def _run_prune(self, max_jobs_retained: int = 0, job_max_age_hours: float = 0) -> int:
+        """Call prune_old_jobs(db) with the given settings and return the count pruned."""
+        import asyncio
+        from sqlalchemy import event
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from conftest import TEST_DATABASE_URL
+
+        async def _do_prune():
+            engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+
+            @event.listens_for(engine.sync_engine, "connect")
+            def _fk_on(dbapi_conn, _record):
+                dbapi_conn.execute("PRAGMA foreign_keys=ON")
+
+            factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+            async with factory() as db:
+                with patch("app.services.job_manager.settings") as mock:
+                    mock.max_jobs_retained = max_jobs_retained
+                    mock.job_max_age_hours = job_max_age_hours
+                    count = await job_manager.prune_old_jobs(db)
+            await engine.dispose()
+            return count
+
+        return asyncio.run(_do_prune())
+
+    def _list_job_ids(self) -> list[str]:
+        """Return all job_ids currently in the DB."""
+        from conftest import run_with_test_db
+        from app.db import models as db_models
+        from sqlalchemy import select
+
+        async def _query(db):
+            result = await db.execute(select(db_models.Job.job_id))
+            return [r for r in result.scalars()]
+
+        return run_with_test_db(_query)
+
+    def _get_audit_ops(self) -> list[str]:
+        """Return all operations in the audit_log table."""
+        from conftest import run_with_test_db
+        from app.db import models as db_models
+        from sqlalchemy import select
+
+        async def _query(db):
+            result = await db.execute(select(db_models.AuditEntry.operation))
+            return [r for r in result.scalars()]
+
+        return run_with_test_db(_query)
 
     def test_no_retention_limits_prunes_nothing(self):
-        with patch("app.services.job_manager.settings") as mock:
-            mock.max_jobs_retained = 0
-            mock.job_max_age_hours = 0
-            j1 = self._create_completed_job()
-            pruned = job_manager.prune_old_jobs()
+        self._seed_job("job-1", status="completed", age_seconds=7201)
+        pruned = self._run_prune(max_jobs_retained=0, job_max_age_hours=0)
         assert pruned == 0
-        assert j1 in job_manager._jobs
+        assert "job-1" in self._list_job_ids()
 
     def test_age_based_pruning_removes_old_jobs(self):
-        with patch("app.services.job_manager.settings") as mock:
-            mock.max_jobs_retained = 0
-            mock.job_max_age_hours = 1  # 1 hour
-            old_job = self._create_completed_job(age_seconds=7201)  # ~2h old
-            new_job = self._create_completed_job(age_seconds=10)    # 10s old
-            pruned = job_manager.prune_old_jobs()
+        self._seed_job("old-job", status="completed", age_seconds=7201)  # ~2 hours old
+        self._seed_job("new-job", status="completed", age_seconds=10)    # 10 seconds old
+        pruned = self._run_prune(max_jobs_retained=0, job_max_age_hours=1)
         assert pruned == 1
-        assert old_job not in job_manager._jobs
-        assert new_job in job_manager._jobs
+        remaining = self._list_job_ids()
+        assert "old-job" not in remaining
+        assert "new-job" in remaining
 
     def test_count_based_pruning_keeps_newest(self):
-        with patch("app.services.job_manager.settings") as mock:
-            mock.max_jobs_retained = 2
-            mock.job_max_age_hours = 0
-            old1 = self._create_completed_job(age_seconds=300)
-            old2 = self._create_completed_job(age_seconds=200)
-            newest = self._create_completed_job(age_seconds=10)
-            pruned = job_manager.prune_old_jobs()
+        self._seed_job("oldest", status="completed", age_seconds=300)
+        self._seed_job("middle", status="completed", age_seconds=200)
+        self._seed_job("newest", status="completed", age_seconds=10)
+        pruned = self._run_prune(max_jobs_retained=2, job_max_age_hours=0)
         assert pruned == 1
-        assert old1 not in job_manager._jobs
-        assert old2 in job_manager._jobs
-        assert newest in job_manager._jobs
+        remaining = self._list_job_ids()
+        assert "oldest" not in remaining
+        assert "middle" in remaining
+        assert "newest" in remaining
 
     def test_pruning_does_not_remove_running_jobs(self):
-        from app.models.schemas import JobStatus
-        with patch("app.services.job_manager.settings") as mock:
-            mock.max_jobs_retained = 1
-            mock.job_max_age_hours = 0
-            running = job_manager.create_job()
-            job_manager._jobs[running].status = JobStatus.RUNNING
-            completed = self._create_completed_job(age_seconds=100)
-            extra = self._create_completed_job(age_seconds=50)
-            pruned = job_manager.prune_old_jobs()
-        # The running job should never be pruned
-        assert running in job_manager._jobs
+        self._seed_job("running-job", status="running", age_seconds=0)
+        self._seed_job("completed-old", status="completed", age_seconds=100)
+        self._seed_job("completed-extra", status="completed", age_seconds=50)
+        pruned = self._run_prune(max_jobs_retained=1, job_max_age_hours=0)
         assert pruned == 1
+        assert "running-job" in self._list_job_ids()
 
-    def test_pruning_clears_all_related_stores(self):
-        from app.models.schemas import JobStatus, DataHealthReport
-        with patch("app.services.job_manager.settings") as mock:
-            mock.max_jobs_retained = 0
-            mock.job_max_age_hours = 1
-            old = self._create_completed_job(age_seconds=7201)
-            # Populate associated stores
-            job_manager._documents[old] = []
-            job_manager._chunks[old] = []
-            job_manager._job_logs[old] = ["log line"]
-            job_manager.prune_old_jobs()
-        assert old not in job_manager._documents
-        assert old not in job_manager._chunks
-        assert old not in job_manager._job_logs
+    def test_pruning_clears_all_related_data(self):
+        """Pruned jobs' cascade deletes remove related documents, chunks, and logs."""
+        from app.db import models as db_models
+        from conftest import run_with_test_db
+        from sqlalchemy import select
+
+        self._seed_job("old-with-data", status="completed", age_seconds=7201)
+
+        async def _seed_related(db):
+            db.add(db_models.Document(
+                job_id="old-with-data",
+                documento_id="doc-sha",
+                data={"documento_id": "doc-sha", "file_index": {}, "named_entities": []},
+            ))
+            db.add(db_models.JobLog(job_id="old-with-data", message="some log"))
+            await db.commit()
+
+        run_with_test_db(_seed_related)
+
+        self._run_prune(max_jobs_retained=0, job_max_age_hours=1)
+
+        async def _check(db):
+            docs = await db.execute(select(db_models.Document).where(db_models.Document.job_id == "old-with-data"))
+            logs = await db.execute(select(db_models.JobLog).where(db_models.JobLog.job_id == "old-with-data"))
+            return list(docs.scalars()), list(logs.scalars())
+
+        docs, logs = run_with_test_db(_check)
+        assert docs == []
+        assert logs == []
 
     def test_pruning_writes_audit_entry(self):
-        _audit_log_module._audit_log.clear()
-        with patch("app.services.job_manager.settings") as mock:
-            mock.max_jobs_retained = 0
-            mock.job_max_age_hours = 1
-            self._create_completed_job(age_seconds=7201)
-            job_manager.prune_old_jobs()
-        ops = [e.operation for e in _audit_log_module._audit_log]
+        self._seed_job("prune-me", status="completed", age_seconds=7201)
+        self._run_prune(max_jobs_retained=0, job_max_age_hours=1)
+        ops = self._get_audit_ops()
         assert "job.pruned" in ops
+
