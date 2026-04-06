@@ -18,6 +18,18 @@
 4. [Requisitos previos](#requisitos-previos)
 5. [Inicio rápido (Docker)](#inicio-rápido-docker)
 6. [Desarrollo local](#desarrollo-local)
+
+---
+
+## 📚 Documentación Operacional
+
+Para **operadores**, **DevOps** y **on-call engineers**:
+
+- 🔧 **[OPERATOR_GUIDE.md](OPERATOR_GUIDE.md)** — Configuración per-job sin reinicio, debugging, auditoría de filtros
+- 🚨 **[INCIDENT_RUNBOOKS.md](INCIDENT_RUNBOOKS.md)** — Procedures de deployment, incident response, rollback
+- 📖 **[DOCS/avances/](DOCS/avances/)** — Historial de implementación de features y decisiones arquitectónicas
+
+---
 7. [Variables de entorno](#variables-de-entorno)
 8. [Referencia de API](#referencia-de-api)
 9. [Testing](#testing)

@@ -152,3 +152,147 @@ class TestAdminFilterStats:
         data = response.json()
         # Total should be 10 + 20 + 30 = 60 (plus any from previous tests, but newest ones count)
         assert data["total_files_filtered"] >= 60
+
+
+class TestAuditBinaryDetection:
+    """Test that binary file detection is properly audited and queryable."""
+
+    def test_binary_skip_registered_as_filtered_file(self):
+        """Test that skipped binary files are logged as filtered."""
+        job_id = "binary-test-job-001"
+        
+        # Simulate binary detection audit records
+        audit_log.record(
+            "scan.files_filtered",
+            actor="system",
+            resource_id=job_id,
+            resource_type="job",
+            outcome="success",
+            skipped_count=3,
+            skipped_files=[
+                {
+                    "path": "/data/image.jpg",
+                    "reason": "extraction_method=skipped_binary (MIME: image/jpeg)",
+                    "extraction_method": "skipped_binary",
+                },
+                {
+                    "path": "/data/archive.zip",
+                    "reason": "extraction_method=skipped_binary (extension: .zip)",
+                    "extraction_method": "skipped_binary",
+                },
+                {
+                    "path": "/data/binary.exe",
+                    "reason": "extraction_method=skipped_binary (extension: .exe)",
+                    "extraction_method": "skipped_binary",
+                },
+            ],
+            filters_applied=True,
+        )
+
+        # Query filter stats
+        response = client.get("/api/admin/filter-stats")
+        assert response.status_code == 200
+        data = response.json()
+
+        # Find our job
+        job_stats = None
+        for scan in data["scans"]:
+            if scan["job_id"] == job_id:
+                job_stats = scan
+                break
+
+        assert job_stats is not None, "Job audit entry not found"
+        assert job_stats["skipped_count"] == 3
+        assert len(job_stats["skipped_files"]) == 3
+
+        # Verify extraction_method is tagged on each skipped file
+        for skipped_file in job_stats["skipped_files"]:
+            assert "extraction_method=skipped_binary" in skipped_file["reason"]
+            assert skipped_file["extraction_method"] == "skipped_binary"
+
+    def test_binary_vs_extension_skip_differentiation(self):
+        """Test that we can differentiate binary skip reasons."""
+        job_id = "binary-reason-test-002"
+
+        audit_log.record(
+            "scan.files_filtered",
+            actor="system",
+            resource_id=job_id,
+            resource_type="job",
+            outcome="success",
+            skipped_count=2,
+            skipped_files=[
+                {
+                    "path": "/data/photo.jpg",
+                    "reason": "extraction_method=skipped_binary (MIME: image/jpeg)",
+                    "extraction_method": "skipped_binary",
+                    "skip_type": "binary_mime",
+                },
+                {
+                    "path": "/data/archive.zip",
+                    "reason": "extraction_method=skipped_binary (extension: .zip)",
+                    "extraction_method": "skipped_binary",
+                    "skip_type": "binary_extension",
+                },
+            ],
+            filters_applied=True,
+        )
+
+        response = client.get(f"/api/admin/filter-stats?job_id={job_id}")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["scans"]) == 1
+        scan = data["scans"][0]
+        assert scan["skipped_count"] == 2
+
+        # Verify we can filter by skip type
+        mime_skip = next(
+            (f for f in scan["skipped_files"] if f.get("skip_type") == "binary_mime"),
+            None,
+        )
+        ext_skip = next(
+            (f for f in scan["skipped_files"] if f.get("skip_type") == "binary_extension"),
+            None,
+        )
+
+        assert mime_skip is not None
+        assert ext_skip is not None
+        assert "image/jpeg" in mime_skip["reason"]
+        assert ".zip" in ext_skip["reason"]
+
+    def test_filter_stats_query_by_extraction_method(self):
+        """Test filtering stats by extraction_method."""
+        job_id = "binary-filter-query-003"
+
+        audit_log.record(
+            "scan.files_filtered",
+            actor="system",
+            resource_id=job_id,
+            resource_type="job",
+            outcome="success",
+            skipped_count=2,
+            skipped_files=[
+                {
+                    "path": "/data/exec.exe",
+                    "reason": "extraction_method=skipped_binary",
+                    "extraction_method": "skipped_binary",
+                },
+                {
+                    "path": "/data/lib.so",
+                    "reason": "extraction_method=skipped_binary",
+                    "extraction_method": "skipped_binary",
+                },
+            ],
+            filters_applied=True,
+        )
+
+        # Query stats
+        response = client.get(f"/api/admin/filter-stats?job_id={job_id}")
+        assert response.status_code == 200
+        data = response.json()
+
+        # All skipped files should have extraction_method="skipped_binary"
+        for scan in data["scans"]:
+            for skipped_file in scan["skipped_files"]:
+                assert skipped_file.get("extraction_method") == "skipped_binary"

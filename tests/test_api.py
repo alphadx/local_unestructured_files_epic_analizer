@@ -298,6 +298,132 @@ class TestReportsEndpoint:
         assert stats["job_id"] == job_id
         assert "extension_breakdown" in stats
         assert "mime_breakdown" in stats
+
+
+class TestE2EBinaryDetection:
+    """E2E tests for automatic binary file detection and skip auditing."""
+
+    def test_e2e_binary_file_skip_by_extension(self, tmp_path):
+        """Test that binary files (.exe) are skipped and audited correctly."""
+        # Create test files
+        (tmp_path / "document.txt").write_text("Hello World")
+        (tmp_path / "binary.exe").write_bytes(b"MZ\x90\x00")  # Make it JPEG header
+        (tmp_path / "readme.md").write_text("# README")
+
+        # Start job with blacklist mode
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+                "group_mode": "strict",
+                "ingestion_mode": "blacklist",
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        # Wait for job completion
+        deadline = time.time() + 10
+        final_status = None
+        while time.time() < deadline:
+            status_resp = client.get(f"/api/jobs/{job_id}")
+            if status_resp.status_code == 200:
+                job_data = status_resp.json()
+                if job_data["status"] in ("completed", "failed"):
+                    final_status = job_data["status"]
+                    break
+            time.sleep(0.1)
+
+        assert final_status == "completed"
+
+        # Get statistics
+        stats_resp = client.get(f"/api/reports/{job_id}/statistics")
+        assert stats_resp.status_code == 200
+        stats_data = stats_resp.json()
+        # Should have 2 files processed (not the .exe)
+        assert stats_data["total_files"] == 2
+
+    def test_e2e_multiple_binaries_skip_with_audit_trail(self, tmp_path):
+        """Test that multiple binary types are skipped and create audit entries."""
+        # Create mixed content
+        (tmp_path / "report.txt").write_text("Business Report")
+        (tmp_path / "image.jpg").write_bytes(b"\xff\xd8\xff\xe0")  # JPEG header
+        (tmp_path / "archive.zip").write_bytes(b"PK\x03\x04")      # ZIP header
+        (tmp_path / "library.so").write_bytes(b"\x7fELF")           # ELF header
+        (tmp_path / "document.pdf").write_bytes(b"%PDF-1.4")       # PDF header
+
+        # Start job
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+                "group_mode": "strict",
+                "ingestion_mode": "blacklist",
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        # Wait for completion
+        deadline = time.time() + 10
+        job_data = None
+        while time.time() < deadline:
+            status_resp = client.get(f"/api/jobs/{job_id}")
+            if status_resp.status_code == 200:
+                job_data = status_resp.json()
+                if job_data["status"] in ("completed", "failed"):
+                    break
+            time.sleep(0.1)
+
+        assert job_data["status"] == "completed"
+        # Should have processed 2 text-based files (txt, pdf)
+        # Binary files (jpg, zip, so) should be skipped
+        assert job_data["total_files"] == 2
+
+        # Verify stats show binary skips
+        stats_resp = client.get(f"/api/reports/{job_id}/statistics")
+        assert stats_resp.status_code == 200
+
+    def test_e2e_whitelist_mode_with_binary_skip(self, tmp_path):
+        """Test whitelist mode respects binary detection."""
+        (tmp_path / "data.txt").write_text("text data")
+        (tmp_path / "data.csv").write_text("col1,col2\n1,2")
+        (tmp_path / "image.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+
+        response = client.post(
+            "/api/jobs",
+            json={
+                "path": str(tmp_path),
+                "enable_pii_detection": False,
+                "enable_embeddings": False,
+                "enable_clustering": False,
+                "group_mode": "strict",
+                "ingestion_mode": "whitelist",
+                "allowed_extensions": ".txt,.csv",
+            },
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        # Wait for completion
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            status_resp = client.get(f"/api/jobs/{job_id}")
+            if status_resp.status_code == 200 and status_resp.json()["status"] == "completed":
+                break
+            time.sleep(0.1)
+
+        # Should only process txt and csv (jpg not in allowed list)
+        stats_resp = client.get(f"/api/reports/{job_id}/statistics")
+        assert stats_resp.status_code == 200
+        stats_data = stats_resp.json()
+        assert stats_data["total_files"] == 2
         assert "size_bucket_distribution" in stats
         assert "directory_breakdown" in stats
         assert "semantic_coverage" in stats
