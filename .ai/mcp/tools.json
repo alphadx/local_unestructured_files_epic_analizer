@@ -1,0 +1,32 @@
+{
+  "code_search": {
+    "tools": ["semantic_search", "grep_search", "file_search"],
+    "input": "Natural language query or exact string/glob",
+    "output": "Relevant code snippets or matching paths",
+    "constraints": ["Prefer semantic_search for intent, grep_search for exact terms, file_search for filenames."]
+  },
+  "repository_access": {
+    "tools": ["read_file", "list_dir", "get_changed_files", "get_errors"],
+    "input": "Absolute file paths or workspace-relative globs",
+    "output": "File contents, directory listings, diffs, or diagnostics",
+    "constraints": ["Use read-only tools before editing. Validate after edits with get_errors."]
+  },
+  "test_runner": {
+    "tools": ["run_in_terminal", "create_and_run_task", "run_notebook_cell"],
+    "input": "Shell command or task description",
+    "output": "Test logs or task output",
+    "constraints": ["Prefer focused tests tied to the changed files.", "Do not use sleep for polling."]
+  },
+  "build_commands": {
+    "tools": ["run_in_terminal", "create_and_run_task"],
+    "input": "Build or dev command",
+    "output": "Build logs or server output",
+    "constraints": ["Confirm the relevant workspace root first.", "Use non-destructive commands only."]
+  },
+  "database_access": {
+    "tools": [],
+    "input": "N/A",
+    "output": "No direct DB tool detected in this workspace",
+    "constraints": ["Use backend endpoints or compose services for ChromaDB interactions."]
+  }
+}

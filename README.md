@@ -29,6 +29,10 @@ Para **operadores**, **DevOps** y **on-call engineers**:
 - 🚨 **[INCIDENT_RUNBOOKS.md](INCIDENT_RUNBOOKS.md)** — Procedures de deployment, incident response, rollback
 - 📖 **[DOCS/avances/](DOCS/avances/)** — Historial de implementación de features y decisiones arquitectónicas
 
+## Intelligent Execution Layer
+
+El repositorio ahora incluye una capa de ejecucion para agentes en `.ai/` con context, hooks, agents, skills y tool contracts basados en los contratos reales de backend, frontend y pruebas. Mantener sincronizado `.ai/project/context.md` cuando cambien rutas, schemas o dependencias operativas.
+
 ---
 7. [Variables de entorno](#variables-de-entorno)
 8. [Referencia de API](#referencia-de-api)

@@ -1,0 +1,60 @@
+{
+  "pre_plan": {
+    "purpose": "Bind every plan to current repo facts before any solution design.",
+    "inputs": [
+      "README.md",
+      "backend/app/main.py",
+      "backend/app/models/schemas.py",
+      "backend/app/routers/",
+      "backend/app/services/",
+      "docker-compose.yml",
+      "tests/"
+    ],
+    "outputs": ["validated project context", "scope notes", "risk notes"],
+    "rules": [
+      "If a requested task conflicts with repo facts, stop and re-check the source files.",
+      "Do not invent endpoints, models, or services that are not present in the repo.",
+      "Prefer the smallest change that satisfies the task."
+    ]
+  },
+  "pre_execution": {
+    "purpose": "Prevent unsafe or off-scope execution before edits or commands.",
+    "inputs": ["requested action", "target files", "intended command"],
+    "outputs": ["allow", "block", "allow with verification"],
+    "rules": [
+      "Block destructive filesystem actions unless explicitly requested.",
+      "Block file-move execution paths unless the user explicitly approves reorganization semantics.",
+      "If backend or frontend code changes, require a matching verification step before response."
+    ]
+  },
+  "post_execution": {
+    "purpose": "Validate the effect of changes and capture regressions early.",
+    "inputs": ["modified files", "errors", "test output"],
+    "outputs": ["verification status", "remaining issues"],
+    "rules": [
+      "Run or request relevant tests after code edits.",
+      "If a changed file reports errors, fix them before closing the task when feasible.",
+      "Do not expand scope to unrelated failures."
+    ]
+  },
+  "pre_response": {
+    "purpose": "Filter the final answer through safety, evidence, and traceability rules.",
+    "inputs": ["final state", "changed files", "verification results"],
+    "outputs": ["concise user-facing summary"],
+    "rules": [
+      "Mention only verified facts and completed work.",
+      "Reference real workspace files when describing changes.",
+      "Call out residual risks or skipped verification explicitly."
+    ]
+  },
+  "learning": {
+    "purpose": "Capture reusable repo-specific patterns for future turns.",
+    "inputs": ["successful patterns", "common failures", "constraints"],
+    "outputs": ["memory notes", "updated project context"],
+    "rules": [
+      "Store only short, factual notes.",
+      "Record stable repository conventions, not transient debug noise.",
+      "Update the project context when a new invariant is discovered."
+    ]
+  }
+}

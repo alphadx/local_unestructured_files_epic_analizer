@@ -59,6 +59,12 @@
 - [ ] **PostgreSQL**: Reemplazar el store en memoria por PostgreSQL (estado de jobs y documentos).
 - [ ] **Celery + Redis**: Cola de tareas para procesamiento paralelo de corpus grandes.
 
+## Intelligent Execution Layer
+
+- [ ] Sincronizar `.ai/project/context.md` cuando cambien endpoints, schemas o contratos de despliegue.
+- [ ] Añadir verificacion CI o smoke tests que validen la capa `.ai` cuando exista un workflow automatizado.
+- [ ] Revisar si nuevos cambios en frontend o backend requieren skills adicionales en `.ai/skills/`.
+
 ---
 
 ## Integraciones futuras (Post-Phase 3)
