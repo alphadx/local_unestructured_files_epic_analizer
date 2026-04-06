@@ -1333,11 +1333,158 @@ curl -X POST "$BASE_URL/api/rag/query" \
 
 ---
 
+## 9. Extracción de Entidades Nombradas — NER (`/api/reports/{job_id}/contacts`)
+
+El endpoint `/api/reports/{job_id}/contacts` devuelve todas las entidades nombradas extraídas del corpus de un job, agregadas por tipo y valor. La extracción usa un pipeline híbrido de dos capas:
+
+| Capa | Técnica | Tipos extraídos | Costo |
+|------|---------|-----------------|-------|
+| **Layer 1** | Regex (CPU-only) | EMAIL, RUT, PHONE | Cero |
+| **Layer 2** | Gemini (LLM) | PERSON, ORGANIZATION, LOCATION, DATE, MONEY | Tokens Gemini |
+
+### 9.1 Request básico — todos los contactos
+
+```bash
+JOB_ID="abc-123"
+curl "http://localhost:8000/api/reports/$JOB_ID/contacts" | jq .
+```
+
+**Response**:
+```json
+{
+  "job_id": "abc-123",
+  "total_documents_analyzed": 42,
+  "total_entities_found": 187,
+  "contacts": [
+    {
+      "entity_type": "EMAIL",
+      "value": "contacto@acmecorp.cl",
+      "frequency": 12,
+      "document_ids": ["sha256abc1", "sha256abc2"],
+      "source_paths": ["/docs/facturas/f001.pdf", "/docs/contratos/c005.pdf"]
+    },
+    {
+      "entity_type": "ORGANIZATION",
+      "value": "Acme Corp S.A.",
+      "frequency": 8,
+      "document_ids": ["sha256abc1"],
+      "source_paths": ["/docs/facturas/f001.pdf"]
+    },
+    {
+      "entity_type": "RUT",
+      "value": "76543210-K",
+      "frequency": 5,
+      "document_ids": ["sha256abc3"],
+      "source_paths": ["/docs/licitaciones/lic001.pdf"]
+    }
+  ]
+}
+```
+
+### 9.2 Filtrar por tipo de entidad
+
+```bash
+# Solo personas
+curl "http://localhost:8000/api/reports/$JOB_ID/contacts?entity_type=PERSON" | jq .
+
+# Solo organizaciones
+curl "http://localhost:8000/api/reports/$JOB_ID/contacts?entity_type=ORGANIZATION" | jq .
+
+# Solo emails
+curl "http://localhost:8000/api/reports/$JOB_ID/contacts?entity_type=EMAIL" | jq .
+```
+
+Tipos disponibles: `PERSON`, `ORGANIZATION`, `LOCATION`, `EMAIL`, `PHONE`, `RUT`, `DATE`, `MONEY`, `OTHER`.
+
+### 9.3 Filtrar por frecuencia mínima
+
+```bash
+# Solo entidades que aparecen 3 o más veces
+curl "http://localhost:8000/api/reports/$JOB_ID/contacts?min_frequency=3" | jq .
+
+# Combinado: personas con 2+ apariciones
+curl "http://localhost:8000/api/reports/$JOB_ID/contacts?entity_type=PERSON&min_frequency=2" | jq .
+```
+
+### 9.4 Ejemplo Python — extracción de directorio de contactos
+
+```python
+import requests
+from collections import defaultdict
+
+BASE_URL = "http://localhost:8000"
+JOB_ID = "abc-123"
+
+# Obtener todos los contactos del job
+resp = requests.get(f"{BASE_URL}/api/reports/{JOB_ID}/contacts")
+report = resp.json()
+
+print(f"Documentos analizados: {report['total_documents_analyzed']}")
+print(f"Entidades encontradas: {report['total_entities_found']}")
+
+# Agrupar por tipo
+by_type = defaultdict(list)
+for contact in report["contacts"]:
+    by_type[contact["entity_type"]].append(contact)
+
+# Directorio de personas
+print("\n=== PERSONAS ===")
+for p in by_type["PERSON"]:
+    print(f"  {p['value']} (aparece en {p['frequency']} documentos)")
+
+# Directorio de organizaciones
+print("\n=== ORGANIZACIONES ===")
+for o in by_type["ORGANIZATION"]:
+    print(f"  {o['value']} → {o['frequency']} menciones")
+
+# Emails y RUTs (Layer 1 regex, alta precisión)
+print("\n=== EMAILS ===")
+for e in by_type["EMAIL"]:
+    docs = ", ".join(e["document_ids"][:3])
+    print(f"  {e['value']} — freq: {e['frequency']}, docs: {docs}")
+
+print("\n=== RUTs ===")
+for r in by_type["RUT"]:
+    print(f"  {r['value']} — freq: {r['frequency']}")
+```
+
+### 9.5 Campos de `named_entities` en documentos individuales
+
+Cada documento en `GET /api/reports/{job_id}/documents` incluye ahora el campo `named_entities`:
+
+```bash
+curl "http://localhost:8000/api/reports/$JOB_ID/documents" | \
+  jq '.[0] | {id: .documento_id, entities: .named_entities}'
+```
+
+**Response**:
+```json
+{
+  "id": "sha256abc1",
+  "entities": [
+    {"entity_type": "EMAIL", "value": "juan@empresa.cl", "confidence": 1.0, "source": "regex"},
+    {"entity_type": "RUT",   "value": "12345678-9",      "confidence": 1.0, "source": "regex"},
+    {"entity_type": "PERSON","value": "Juan Pérez",       "confidence": 0.92, "source": "gemini"},
+    {"entity_type": "ORGANIZATION","value": "Empresa S.A.", "confidence": 0.88, "source": "gemini"}
+  ]
+}
+```
+
+### 9.6 Notas sobre el pipeline NER
+
+- **Layer 1 (regex)** siempre se ejecuta sobre texto extraído, con precisión del 100% para emails y RUTs chilenos.
+- **Layer 2 (Gemini)** se ejecuta durante la clasificación y queda embebido en la respuesta sin llamadas adicionales.
+- Las entidades se **deduplicam** por `(entity_type, valor_normalizado)` conservando la mayor confianza.
+- Los resultados en `/contacts` se ordenan por `frequency` descendente.
+
+---
+
 ## Última Actualización
 
-Documentación actualizada el 05 de abril de 2026 para endpoints:
+Documentación actualizada el 06 de abril de 2026 para endpoints:
 - `/api/search` (POST)
 - `/api/rag/query` (POST)
 - `/api/jobs/{job_id}/logs/ws` (WebSocket)
+- `/api/reports/{job_id}/contacts` (GET) — **NER Fase 1**
 
 Para consultas adicionales o reportar discrepancias, abrir un issue en el repositorio.
