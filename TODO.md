@@ -17,6 +17,32 @@
 	- ~~Permitir lista negra para bloquear extensiones concretas aunque estén permitidas por defecto.~~
 - [x] Release note formal: documentación de la corrección de filtros de ingestión y cobertura E2E completa para blacklist/whitelist.
 
+## Plan de cierre: atar cabos sueltos
+
+**Documento guía**: [012_plan_cierre_cabos_sueltos.md](DOCS/avances/012_plan_cierre_cabos_sueltos.md)
+
+### Hito 0 — Planificación
+- [x] Confirmar alcance exacto de cierre: filtrado binario, documentación de despliegue y dependencias opcionales.
+- [x] Definir criterio de terminado para cada pendiente y la secuencia de ejecución.
+- [x] Alinear pruebas de regresión mínimas antes de tocar lógica adicional.
+- [x] Pedir avance al cierre de cada hito antes de pasar al siguiente.
+
+### Hito 1 — Endurecimiento del pipeline de ingesta
+- [x] Añadir skip temprano para archivos sin texto extraíble antes de clasificación/embedding.
+- [x] Cubrir binarios, ejecutables y comprimidos con reglas explícitas y tests de regresión.
+
+### Hito 2 — Cierre documental
+- [ ] Reflejar reglas de `mime_type` y extensiones en la guía de despliegue.
+- [ ] Asegurar que README, USAGE_EXAMPLES y la documentación de avance describan el comportamiento final sin contradicciones.
+
+### Hito 3 — Dependencias y fallback
+- [ ] Documentar `hdbscan` como dependencia opcional.
+- [ ] Explicar el fallback efectivo cuando `hdbscan` no esté disponible.
+
+### Hito 4 — Validación final
+- [ ] Ejecutar pruebas unitarias y E2E que cubran filtros, auditoría y rutas de ingesta.
+- [ ] Cerrar el plan solo cuando la cobertura de regresión y la documentación estén coherentes entre sí.
+
 ## Prioridad media: documentación de API y fuentes
 
 - ~~Documentar ejemplos de request/response para `/api/search` y `/api/rag/query`.~~ ✅ **COMPLETADO** — Archivo [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) creado con ejemplos exhaustivos.

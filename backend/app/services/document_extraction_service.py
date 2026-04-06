@@ -14,6 +14,34 @@ _MAX_CHUNK_CHARS = 1_200
 _MAX_TEXT_CHARS = 20_000
 _MAX_CLASSIFICATION_CHARS = 12_000
 
+# Binary MIME type prefixes that should be skipped without attempting extraction
+_BINARY_MIME_PREFIXES = {
+    "image/",
+    "video/",
+    "audio/",
+    "application/x-executable",
+    "application/x-sharedlib",
+    "application/x-dvi",
+    "application/x-jar",
+    "application/gzip",
+    "application/x-gzip",
+    "application/zip",
+    "application/x-rar-compressed",
+    "application/x-7z-compressed",
+    "application/x-tar",
+    "application/octet-stream",
+}
+
+# Binary file extensions to skip
+_BINARY_EXTENSIONS = {
+    ".exe", ".dll", ".so", ".dylib", ".bin", ".app", ".msi",
+    ".jar", ".com", ".bat", ".cmd", ".sh", ".class",
+    ".o", ".a", ".lib", ".pyc", ".pyo",
+    ".zip", ".tar", ".gz", ".gzip", ".rar", ".7z", ".bz2", ".xz",
+    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".ico",
+    ".mp3", ".mp4", ".avi", ".mov", ".mkv", ".flv", ".wav",
+}
+
 
 @dataclass(slots=True)
 class DocumentExtraction:
@@ -146,13 +174,30 @@ def _extract_with_unstructured(path: Path, documento_id: str) -> tuple[str, list
     return "\n\n".join(raw_parts), chunks, len(raw_parts)
 
 
+def _is_binary_file(file_index: FileIndex) -> bool:
+    """Check if file is binary based on extension or MIME type."""
+    # Check by extension first (fastest)
+    ext_lower = file_index.extension.lower()
+    if ext_lower in _BINARY_EXTENSIONS:
+        return True
+    
+    # Check by MIME type prefix
+    if file_index.mime_type:
+        mime_lower = file_index.mime_type.lower()
+        for binary_prefix in _BINARY_MIME_PREFIXES:
+            if mime_lower.startswith(binary_prefix):
+                return True
+    
+    return False
+
+
 def extract_document_content(file_index: FileIndex) -> DocumentExtraction:
     """
     Extract readable content and semantic chunks from a file.
 
     Uses `unstructured` when available and falls back to basic text extraction
-    for plain-text documents. Binary formats degrade gracefully to an empty
-    extraction so the rest of the pipeline can continue.
+    for plain-text documents. Binary formats are detected early and skipped
+    without attempting extraction.
     """
     path = Path(file_index.path)
     documento_id = file_index.sha256 or file_index.path
@@ -161,6 +206,23 @@ def extract_document_content(file_index: FileIndex) -> DocumentExtraction:
     chunks: list[DocumentChunk] = []
     extraction_method = "none"
     element_count = 0
+
+    # Skip early if file is binary
+    if _is_binary_file(file_index):
+        logger.debug(
+            "Skipping binary file (early detection): %s (ext=%s, mime=%s)",
+            file_index.path,
+            file_index.extension,
+            file_index.mime_type or "unknown",
+        )
+        return DocumentExtraction(
+            documento_id=documento_id,
+            source_path=str(path),
+            text="",
+            chunks=[],
+            extraction_method="skipped_binary",
+            element_count=0,
+        )
 
     unstructured_text, unstructured_chunks, count = _extract_with_unstructured(path, documento_id)
     if unstructured_chunks:

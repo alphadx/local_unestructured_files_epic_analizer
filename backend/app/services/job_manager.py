@@ -308,11 +308,19 @@ async def run_pipeline(job_id: str, request: ScanRequest) -> None:
             )
 
             if not extraction.text and not extraction.chunks:
-                _log(
-                    job_id,
-                    "INFO",
-                    f"[Paso 2/5] Archivo sin texto extraído, omitiendo clasificación/embedding: {fi.path}",
-                )
+                reason = f"({extraction.extraction_method})" if extraction.extraction_method not in ("none", "skipped_binary") else ""
+                if extraction.extraction_method == "skipped_binary":
+                    _log(
+                        job_id,
+                        "DEBUG",
+                        f"[Paso 2/5] Archivo binario detectado, saltando: {fi.path}",
+                    )
+                else:
+                    _log(
+                        job_id,
+                        "INFO",
+                        f"[Paso 2/5] Archivo sin texto extraído {reason}, omitiendo clasificación/embedding: {fi.path}",
+                    )
                 continue
 
             classification_context = build_classification_context(extraction)
