@@ -465,3 +465,45 @@ export async function getFilterConfig(): Promise<FilterConfiguration> {
   const { data } = await api.get<FilterConfiguration>("/api/admin/filter-config");
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// NER / Contacts
+// ---------------------------------------------------------------------------
+
+export type NamedEntityType =
+  | "PERSON"
+  | "ORGANIZATION"
+  | "LOCATION"
+  | "EMAIL"
+  | "PHONE"
+  | "RUT"
+  | "DATE"
+  | "MONEY"
+  | "OTHER";
+
+export interface ContactRecord {
+  entity_type: NamedEntityType;
+  value: string;
+  frequency: number;
+  document_ids: string[];
+  source_paths: string[];
+}
+
+export interface ContactsReport {
+  job_id: string;
+  total_documents_analyzed: number;
+  total_entities_found: number;
+  contacts: ContactRecord[];
+}
+
+export async function getContacts(
+  jobId: string,
+  entityType?: NamedEntityType,
+  minFrequency?: number
+): Promise<ContactsReport> {
+  const params: Record<string, unknown> = {};
+  if (entityType) params.entity_type = entityType;
+  if (minFrequency !== undefined) params.min_frequency = minFrequency;
+  const { data } = await api.get<ContactsReport>(`/api/reports/${jobId}/contacts`, { params });
+  return data;
+}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AuditEntry,
   AuditLogResponse,
+  ContactsReport,
   CorpusExplorationReport,
   DataHealthReport,
   GroupAnalysisResult,
@@ -19,6 +20,7 @@ import {
   executeReorganization,
   getApiBase,
   getAuditLog,
+  getContacts,
   getExploration,
   getGroups,
   getGroupSimilarities,
@@ -37,12 +39,13 @@ import FilterConfiguration from "@/components/FilterConfiguration";
 import GroupAnalysis from "@/components/GroupAnalysis";
 import HealthReport from "@/components/HealthReport";
 import JobStatusCard from "@/components/JobStatusCard";
+import NerReport from "@/components/NerReport";
 import RelationGraph from "@/components/RelationGraph";
 import StatisticsCharts from "@/components/StatisticsCharts";
 
 const POLL_INTERVAL_MS = 2_000;
 
-type Tab = "dashboard" | "clusters" | "groups" | "audit" | "exploration" | "search" | "rag";
+type Tab = "dashboard" | "clusters" | "groups" | "audit" | "exploration" | "search" | "rag" | "entities";
 
 export default function Home() {
   const [path, setPath] = useState("");
@@ -74,9 +77,11 @@ export default function Home() {
   const [groupAnalysis, setGroupAnalysis] = useState<GroupAnalysisResult | null>(null);
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
   const [ragResponse, setRagResponse] = useState<RagQueryResponse | null>(null);
+  const [contacts, setContacts] = useState<ContactsReport | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [isLoadingSimilarities, setIsLoadingSimilarities] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
@@ -118,21 +123,27 @@ export default function Home() {
     setGroupAnalysis(null);
     setSearchResponse(null);
     setRagResponse(null);
+    setContacts(null);
   }, []);
 
   const loadInsights = useCallback(async (jobId: string) => {
     setIsLoadingInsights(true);
     setIsLoadingGroups(true);
+    setIsLoadingContacts(true);
     try {
-      const [stats, exp, groups] = await Promise.all([
+      const [stats, exp, groups, cts] = await Promise.all([
         getStatistics(jobId),
         getExploration(jobId),
         getGroups(jobId).catch(() => null),
+        getContacts(jobId).catch(() => null),
       ]);
       setStatistics(stats);
       setExploration(exp);
       if (groups) {
         setGroupAnalysis(groups);
+      }
+      if (cts) {
+        setContacts(cts);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error al cargar analíticas";
@@ -140,6 +151,7 @@ export default function Home() {
     } finally {
       setIsLoadingInsights(false);
       setIsLoadingGroups(false);
+      setIsLoadingContacts(false);
     }
   }, []);
 
@@ -356,6 +368,7 @@ export default function Home() {
     { id: "dashboard", label: "Dashboard" },
     { id: "clusters", label: "Mapa de Clusters" },
     { id: "groups", label: "Análisis de Grupos" },
+    { id: "entities", label: "Entidades (NER)" },
     { id: "audit", label: "Auditoría" },
     { id: "exploration", label: "Exploración" },
     { id: "search", label: "Búsqueda" },
@@ -717,6 +730,24 @@ export default function Home() {
                   isLoading={isLoadingGroups}
                   onLoadSimilarities={handleLoadGroupSimilarities}
                 />
+              </div>
+            )}
+
+            {activeTab === "entities" && (
+              <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-800">Entidades Nombradas (NER)</h2>
+                  <p className="text-sm text-gray-500">Personas, organizaciones, lugares y más extraídos de los documentos</p>
+                </div>
+                {isLoadingContacts && (
+                  <p className="text-sm text-gray-500 animate-pulse">Cargando entidades…</p>
+                )}
+                {!isLoadingContacts && !contacts && (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    No hay datos de entidades disponibles. Asegúrate de que el job haya finalizado.
+                  </div>
+                )}
+                {contacts && <NerReport report={contacts} />}
               </div>
             )}
 
