@@ -231,6 +231,21 @@
 - [ ] Ranking híbrido moderno.
 - [ ] Filtrado mejorado de binarios para LLM.
 
+### Fase 5B — Deduplicación avanzada (Workers externos opcionales)
+**Documento**: [DOCS/avances/020_investigacion_deduplicacion_avanzada.md](DOCS/avances/020_investigacion_deduplicacion_avanzada.md)
+
+- [x] **`DedupService`** — Abstracción con backends intercambiables (`native`, `czkawka`, `dupeguru`). Configurado con `DEDUP_BACKEND` y `DEDUP_SIMILARITY_THRESHOLD` en `.env`.
+- [x] **Czkawka** — Soporte como backend CLI opcional para detección de imágenes/vídeos similares (no solo idénticos) y caché de escaneo incremental.
+- [x] **dupeGuru (Picture mode)** — Pre-filtro visual antes de llamadas a Gemini; archivos visualmente idénticos se marcan como duplicados sin coste de API.
+- [x] **`tokens_saved_by_visual_dedup`** — Nueva métrica en `DataHealthReport` que registra cuántos archivos se evitaron enviar a Gemini por deduplicación visual.
+- [x] **`skip_visual_dedup`** — Flag opcional en `ScanRequest` para deshabilitar el pre-filtro visual por job.
+- [x] **`POST /api/reorganize/{job_id}/generate-script`** — Endpoint que genera un script `.sh` auditable (estilo rmlint) con los movimientos propuestos, sin ejecutarlos.
+- [x] **`run_dedup_worker`** — Tarea Celery independiente para deduplicación masiva en background con `jdupes` u otros backends.
+- [x] **Dockerfile** — `ARG ENABLE_DEDUP_TOOLS=false` para instalación opcional de rmlint, jdupes y czkawka en el contenedor.
+- [ ] Benchmark local: latencia native vs czkawka en corpus de 1k-10k archivos.
+- [ ] Integrar spaCy o librería de perceptual hashing pura-Python como alternativa a Czkawka para entornos sin CLI.
+- [ ] Vista/tabla en frontend para explorar duplicados visuales detectados.
+
 ### ✅ Fase 6 — Seguridad y cumplimiento (COMPLETADO)
 - API keys, auditoría inmutable, políticas de retención.
 

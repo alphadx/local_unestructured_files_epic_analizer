@@ -386,6 +386,14 @@ class ScanRequest(BaseModel):
         None,
         description="Override for denied MIME type prefixes. Comma-separated like 'application/x-executable'",
     )
+    skip_visual_dedup: bool = Field(
+        False,
+        description=(
+            "When True, skips the visual deduplication pre-filter before Gemini classification. "
+            "Useful when all image files must be individually analysed regardless of visual similarity. "
+            "Has no effect when DEDUP_BACKEND=native."
+        ),
+    )
 
     @field_validator("group_mode", mode="before")
     @classmethod
@@ -461,6 +469,14 @@ class DataHealthReport(BaseModel):
     consistency_errors: list[str] = Field(default_factory=list)
     clusters: list[Cluster] = Field(default_factory=list)
     reorganisation_plan: list[dict[str, Any]] = Field(default_factory=list)
+    tokens_saved_by_visual_dedup: int = Field(
+        default=0,
+        description=(
+            "Number of image files skipped before Gemini classification due to "
+            "visual deduplication (DEDUP_BACKEND=czkawka or dupeguru). "
+            "Each skipped file represents one saved Gemini API call."
+        ),
+    )
 
 
 class ClusterSummary(BaseModel):

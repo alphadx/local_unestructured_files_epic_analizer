@@ -383,6 +383,34 @@ async def run_pipeline(job_id: str, request: ScanRequest, db: AsyncSession) -> N
              f"total={len(file_indices)}, únicos={len(unique_files)}, duplicados={dups}", db)
         await _update_job(db, job_id, message=f"Indexados {len(file_indices)} archivos. Filtrando duplicados…")
 
+        # --- Step 1b: Visual deduplication pre-filter (optional) ---
+        tokens_saved_by_visual_dedup = 0
+        if not request.skip_visual_dedup:
+            from app.services.dedup_service import get_dedup_service
+
+            dedup_svc = get_dedup_service()
+            if dedup_svc.effective_backend != "native":
+                await _log(
+                    job_id, "INFO",
+                    f"[Paso 1b/5] Aplicando deduplicación visual ({dedup_svc.effective_backend}) "
+                    f"sobre {len(unique_files)} archivo(s) únicos…",
+                    db,
+                )
+                unique_files = await loop.run_in_executor(
+                    None, dedup_svc.find_visual_duplicates, unique_files
+                )
+                tokens_saved_by_visual_dedup = sum(1 for f in unique_files if f.is_duplicate)
+                if tokens_saved_by_visual_dedup:
+                    await _log(
+                        job_id, "INFO",
+                        f"[Paso 1b/5] Deduplicación visual completada — "
+                        f"{tokens_saved_by_visual_dedup} imagen(es) marcadas como duplicados visuales "
+                        f"(ahorro estimado: {tokens_saved_by_visual_dedup} llamada(s) a Gemini).",
+                        db,
+                    )
+                # Keep only visually unique files for Gemini
+                unique_files = [f for f in unique_files if not f.is_duplicate]
+
         # --- Step 2: Gemini classification ---
         from app.services import gemini_service
         from app.services.document_extraction_service import (
@@ -559,7 +587,7 @@ async def run_pipeline(job_id: str, request: ScanRequest, db: AsyncSession) -> N
         # --- Step 5: Build health report ---
         await _update_job(db, job_id, message="Generando reporte de salud de datos…")
         await _log(job_id, "INFO", "[Paso 4/6] Generando reporte de salud de datos…", db)
-        report = _build_report(job_id, file_indices, documents, clusters)
+        report = _build_report(job_id, file_indices, documents, clusters, tokens_saved_by_visual_dedup)
         db.add(db_models.Report(job_id=job_id, data=report.model_dump()))
         await db.commit()
 
@@ -624,6 +652,7 @@ def _build_report(
     file_indices: list[Any],
     documents: list[DocumentMetadata],
     clusters: list[Any],
+    tokens_saved_by_visual_dedup: int = 0,
 ) -> DataHealthReport:
     # Duplicate groups
     hash_to_paths: dict[str, list[str]] = defaultdict(list)
@@ -670,6 +699,7 @@ def _build_report(
         consistency_errors=all_errors,
         clusters=clusters,
         reorganisation_plan=reorg_plan,
+        tokens_saved_by_visual_dedup=tokens_saved_by_visual_dedup,
     )
 
 

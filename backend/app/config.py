@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     # Redis – Phase 2 (broker + pub/sub)
     redis_url: str = "redis://localhost:6379/0"
 
+    # Deduplication – Phase 5B (optional external tools)
+    # Backend: "native" (SHA-256 only), "czkawka" (similar images/videos), "dupeguru" (visual)
+    dedup_backend: str = "native"
+    # Similarity threshold for fuzzy backends (0.0–1.0). Only used when dedup_backend != "native".
+    dedup_similarity_threshold: float = 0.95
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://frontend:3000"]
     cors_allow_credentials: bool = False

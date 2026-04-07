@@ -14,6 +14,7 @@
 4. [Checklist de deployment](#checklist-de-deployment)
 5. [Monitoreo y alertas](#monitoreo-y-alertas)
 6. [FAQ Operacional](#faq-operacional)
+7. [Herramientas de Deduplicación Opcionales (Fase 5B)](#herramientas-de-deduplicación-opcionales-fase-5b)
 
 ---
 
@@ -555,3 +556,131 @@ Especifica al menos una extensión: `ALLOWED_EXTENSIONS=.txt,.pdf`
 - ChromaDB snapshots: `docker-compose exec chromadb tar czf /backup/snapshot.tar.gz /data`
 - Audit logs: Stored locally in `/var/lib/epic-audit.db` (backup daily)
 
+
+---
+
+## Herramientas de Deduplicación Opcionales (Fase 5B)
+
+Epic Analyzer incluye soporte opcional para herramientas externas de deduplicación
+avanzada. El sistema **no las requiere** — funciona perfectamente con el backend
+`native` (SHA-256) sin ninguna instalación adicional.
+
+### Variables de entorno relevantes
+
+```env
+# Backend de deduplicación: native | czkawka | dupeguru
+DEDUP_BACKEND=native
+
+# Umbral de similitud para backends fuzzy (0.0–1.0; default 0.95)
+DEDUP_SIMILARITY_THRESHOLD=0.95
+```
+
+Agrega estas variables a tu `.env` o `docker-compose.yml` en el servicio `backend`.
+
+### Herramientas soportadas
+
+#### rmlint + jdupes — Deduplicación exacta masiva
+
+**Cuándo usar**: Corpus muy grandes donde la deduplicación debe ser un pre-paso
+independiente del análisis semántico.
+
+**Instalación (Ubuntu/Debian)**:
+```bash
+apt-get install rmlint jdupes
+```
+
+**Con Docker** (construir imagen con herramientas incluidas):
+```bash
+docker build --build-arg ENABLE_DEDUP_TOOLS=true -t epic-analyzer-dedup ./backend
+```
+
+**Invocar el worker de deduplicación**:
+```python
+# Desde Python (p. ej. script de administración)
+from app.workers.tasks import run_dedup_worker
+
+# jdupes — rápido, duplicados exactos
+result = run_dedup_worker.delay(job_id="<uuid>", backend="jdupes")
+
+# rmlint — con verificación de checksums y scripts de limpieza
+result = run_dedup_worker.delay(job_id="<uuid>", backend="rmlint")
+```
+
+**Generar script de reorganización auditable (rmlint)**:
+```bash
+curl -X POST "http://localhost:8000/api/reorganize/<job_id>/generate-script" \
+  -o reorg_<job_id>.sh
+# Revisar el script y luego ejecutar:
+bash reorg_<job_id>.sh
+```
+
+#### Czkawka — Imágenes y vídeos similares
+
+**Cuándo usar**: Repositorios de fotos donde hay múltiples versiones de la misma
+imagen (diferente resolución, compresión, metadatos). Evita enviar imágenes
+visualmente idénticas a Gemini (ahorro de tokens API).
+
+**Instalación**:
+```bash
+# Descargar binario desde GitHub Releases
+wget https://github.com/qarmin/czkawka/releases/latest/download/linux_czkawka_cli
+chmod +x linux_czkawka_cli
+mv linux_czkawka_cli /usr/local/bin/czkawka_cli
+```
+
+**Habilitar en `.env`**:
+```env
+DEDUP_BACKEND=czkawka
+DEDUP_SIMILARITY_THRESHOLD=0.95
+```
+
+**Con skip_visual_dedup por job** (si necesitas que un job específico omita el filtro):
+```bash
+curl -X POST "http://localhost:8000/api/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "/fotos/eventos",
+    "skip_visual_dedup": true
+  }'
+```
+
+#### dupeGuru (modo Picture) — Pre-filtro visual
+
+**Cuándo usar**: Alternativa a Czkawka para detección visual de imágenes similares.
+
+**Instalación**:
+```bash
+# AppImage desde GitHub Releases
+wget https://github.com/arsenetar/dupeguru/releases/latest/download/dupeguru_Linux.AppImage
+chmod +x dupeguru_Linux.AppImage
+# Opcional: crear symlink
+ln -s $(pwd)/dupeguru_Linux.AppImage /usr/local/bin/dupeguru
+```
+
+**Habilitar en `.env`**:
+```env
+DEDUP_BACKEND=dupeguru
+DEDUP_SIMILARITY_THRESHOLD=0.90
+```
+
+### Métricas expuestas
+
+El campo `tokens_saved_by_visual_dedup` en `GET /api/reports/<job_id>` indica
+cuántas llamadas a Gemini se evitaron gracias al pre-filtro visual.
+
+```bash
+curl "http://localhost:8000/api/reports/<job_id>" | jq '.tokens_saved_by_visual_dedup'
+# → 47
+```
+
+### Degradación graceful
+
+Si la herramienta configurada no está instalada, Epic Analyzer lo detecta
+automáticamente y continúa con el backend `native`. El log mostrará:
+
+```
+WARNING  DedupService: 'czkawka' backend requested but 'czkawka_cli' not found on PATH.
+         Falling back to 'native'. Install czkawka_cli to enable advanced deduplication.
+```
+
+No se requiere reinicio ni cambio de configuración. La degradación es transparente.
