@@ -10,6 +10,8 @@ because Celery workers are plain OS processes, not running an existing loop.
 
 import asyncio
 import logging
+import shutil
+from typing import Callable
 
 from app.workers.celery_app import celery_app
 
@@ -111,7 +113,6 @@ def run_dedup_worker(self, job_id: str, backend: str = "jdupes") -> dict:
 
 def _run_dedup_sync(job_id: str, backend: str) -> dict:
     """Synchronous deduplication logic for the Celery worker."""
-    import shutil
     import subprocess
     import tempfile
     from pathlib import Path
@@ -131,9 +132,9 @@ def _run_dedup_sync(job_id: str, backend: str) -> dict:
     if backend == "native":
         groups = _native_dedup(file_paths)
     elif backend == "jdupes":
-        groups = _jdupes_dedup(file_paths) if shutil.which("jdupes") else _native_dedup(file_paths)
+        groups = _run_with_fallback("jdupes", _jdupes_dedup, file_paths)
     elif backend == "rmlint":
-        groups = _rmlint_dedup(file_paths) if shutil.which("rmlint") else _native_dedup(file_paths)
+        groups = _run_with_fallback("rmlint", _rmlint_dedup, file_paths)
     elif backend == "czkawka":
         # Delegate to DedupService for czkawka
         from app.models.schemas import FileIndex
@@ -152,7 +153,9 @@ def _run_dedup_sync(job_id: str, backend: str) -> dict:
         dup_of_map: dict[str, list[str]] = {}
         for fi in updated:
             if fi.is_duplicate and fi.duplicate_of:
-                dup_of_map.setdefault(fi.duplicate_of, [fi.duplicate_of]).append(fi.path)
+                if fi.duplicate_of not in dup_of_map:
+                    dup_of_map[fi.duplicate_of] = [fi.duplicate_of]
+                dup_of_map[fi.duplicate_of].append(fi.path)
         groups = [{"original": orig, "duplicates": dups} for orig, dups in dup_of_map.items()]
     else:
         logger.warning("run_dedup_worker: unknown backend '%s', using native", backend)
@@ -185,6 +188,23 @@ async def _fetch_job_file_paths(job_id: str) -> list[str]:
                     seen.add(p)
                     paths.append(p)
         return paths
+
+
+def _run_with_fallback(
+    tool_name: str,
+    tool_fn: "Callable[[list[str]], list[dict]]",
+    file_paths: list[str],
+) -> list[dict]:
+    """
+    Run *tool_fn* if *tool_name* is available on PATH; otherwise fall back to native SHA-256.
+    """
+    if shutil.which(tool_name):
+        return tool_fn(file_paths)
+    logger.warning(
+        "run_dedup_worker: '%s' not found on PATH, falling back to native SHA-256 deduplication.",
+        tool_name,
+    )
+    return _native_dedup(file_paths)
 
 
 def _native_dedup(file_paths: list[str]) -> list[dict]:

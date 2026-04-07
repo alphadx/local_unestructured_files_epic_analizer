@@ -96,9 +96,9 @@ async def generate_reorganization_script(
     use_rmlint = shutil.which("rmlint") is not None
 
     if use_rmlint and plan:
-        script_content = _generate_rmlint_script(job_id, plan, now)
+        script_content = _generate_rmlint_script(job_id, plan, generated_at=now)
     else:
-        script_content = _generate_native_script(job_id, plan, now, use_rmlint=use_rmlint)
+        script_content = _generate_native_script(job_id, plan, generated_at=now, use_rmlint=use_rmlint)
 
     audit_log.record(
         "reorganization.script_generated",
@@ -120,8 +120,8 @@ async def generate_reorganization_script(
 def _generate_native_script(
     job_id: str,
     plan: list[dict],
-    timestamp: str,
     *,
+    generated_at: str,
     use_rmlint: bool,
 ) -> str:
     """Build a plain bash mv-based reorganisation script."""
@@ -136,7 +136,7 @@ def _generate_native_script(
         "# ============================================================",
         f"# Epic Analyzer — Script de reorganización",
         f"# Job ID  : {job_id}",
-        f"# Generado: {timestamp}",
+        f"# Generado: {generated_at}",
         "# ============================================================",
         "# ADVERTENCIA: Revisa este script ANTES de ejecutarlo.",
         "# Los movimientos de archivos son IRREVERSIBLES.",
@@ -173,7 +173,7 @@ def _generate_native_script(
     return "\n".join(lines) + "\n"
 
 
-def _generate_rmlint_script(job_id: str, plan: list[dict], timestamp: str) -> str:
+def _generate_rmlint_script(job_id: str, plan: list[dict], *, generated_at: str) -> str:
     """
     Use rmlint to build an enhanced script.
 
@@ -203,14 +203,14 @@ def _generate_rmlint_script(job_id: str, plan: list[dict], timestamp: str) -> st
                     rmlint_script = rmlint_sh.read_text(encoding="utf-8")
         except (subprocess.TimeoutExpired, OSError) as exc:
             logger.warning("generate-script: rmlint failed (%s), falling back to native", exc)
-            return _generate_native_script(job_id, plan, timestamp, use_rmlint=False)
+            return _generate_native_script(job_id, plan, generated_at=generated_at, use_rmlint=False)
 
     header = "\n".join([
         "#!/bin/bash",
         "# ============================================================",
         f"# Epic Analyzer — Script de reorganización (generado con rmlint)",
         f"# Job ID  : {job_id}",
-        f"# Generado: {timestamp}",
+        f"# Generado: {generated_at}",
         "# ============================================================",
         "# ADVERTENCIA: Revisa este script ANTES de ejecutarlo.",
         "#",
