@@ -11,6 +11,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Optional: install external deduplication tools (rmlint, jdupes).
+# Set ENABLE_DEDUP_TOOLS=true at build time to include them.
+# Example: docker build --build-arg ENABLE_DEDUP_TOOLS=true .
+ARG ENABLE_DEDUP_TOOLS=false
+RUN if [ "$ENABLE_DEDUP_TOOLS" = "true" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends \
+            rmlint \
+            jdupes \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
