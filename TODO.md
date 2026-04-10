@@ -56,6 +56,7 @@
 
 - ~~Revisar si la configuración de filtrado debe exponerse también en frontend.~~ ✅ **COMPLETADO** — Componente `FilterConfiguration` en frontend; endpoint `/api/admin/filter-config` expone configuración actual.
 - [ ] Evaluar si las reglas de `mime_type` y extensiones deben quedar reflejadas en la guía de despliegue.
+- [ ] Ejecutar prueba de estrés de workers Celery (10+ jobs consecutivos por proceso) para validar estabilidad del loop persistente y cierre de conexiones asyncpg en producción.
 - ~~**PostgreSQL**: Reemplazar el store en memoria por PostgreSQL (estado de jobs y documentos).~~ ✅ **COMPLETADO** — Ver [019_fase2_postgresql_celery.md](DOCS/avances/019_fase2_postgresql_celery.md). SQLAlchemy async ORM, Alembic migrations, 7 tablas, PKs compuestas.
 - ~~**Celery + Redis**: Cola de tareas para procesamiento paralelo de corpus grandes.~~ ✅ **COMPLETADO** — Ver [019_fase2_postgresql_celery.md](DOCS/avances/019_fase2_postgresql_celery.md). Celery worker, Redis broker, Flower monitoring, docker-compose actualizado.
 

@@ -53,3 +53,8 @@ async def create_tables() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def dispose_engine() -> None:
+    """Dispose pooled DB connections (used during worker process shutdown)."""
+    await engine.dispose()

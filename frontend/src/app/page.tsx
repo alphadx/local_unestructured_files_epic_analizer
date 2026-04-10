@@ -48,7 +48,7 @@ const POLL_INTERVAL_MS = 2_000;
 type Tab = "dashboard" | "clusters" | "groups" | "audit" | "exploration" | "search" | "rag" | "entities";
 
 export default function Home() {
-  const [path, setPath] = useState("");
+  const [path, setPath] = useState("/data/scan");
   const [apiUrl, setApiUrl] = useState(getApiBase());
   const [apiKey, setApiKeyState] = useState("");
   const [enablePii, setEnablePii] = useState(true);

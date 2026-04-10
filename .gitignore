@@ -39,3 +39,6 @@ frontend/.env.local
 *.swo
 .DS_Store
 Thumbs.db
+
+# pruebas
+fiasco/

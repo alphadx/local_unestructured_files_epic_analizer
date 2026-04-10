@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     max_file_size_mb: int = 10
     scan_concurrency: int = 4
     log_level: str = "INFO"
+    # Optional local source root. When set, local scan requests are resolved
+    # inside this directory and cannot escape it.
+    local_scan_root: str = ""
 
     # Content filtering — mime types and extensions
     # Ingestion mode: "whitelist" (only allow listed extensions/mimetypes) or "blacklist" (allow all except denied)

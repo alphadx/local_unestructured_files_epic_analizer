@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from app.config import settings
@@ -403,6 +404,28 @@ class ScanRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_remote_source_options(self) -> "ScanRequest":
+        raw_path = self.path.strip()
+        if not raw_path:
+            raise ValueError("Scan path cannot be empty.")
+
+        if self.source_provider == SourceProvider.LOCAL:
+            local_root_raw = settings.local_scan_root.strip()
+            if local_root_raw:
+                local_root = Path(local_root_raw).expanduser().resolve(strict=False)
+                requested = Path(raw_path)
+                if not requested.is_absolute():
+                    requested = local_root / requested
+                resolved = requested.expanduser().resolve(strict=False)
+                try:
+                    resolved.relative_to(local_root)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Local scan path must be under configured LOCAL_SCAN_ROOT: {local_root}"
+                    ) from exc
+                self.path = str(resolved)
+            else:
+                self.path = str(Path(raw_path).expanduser())
+
         source_options = {k: str(v).strip() for k, v in self.source_options.items() if v is not None}
 
         if self.source_provider == SourceProvider.GOOGLE_DRIVE:

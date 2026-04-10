@@ -65,6 +65,7 @@ services:
       - VECTOR_STORE_HEADERS=${VECTOR_STORE_HEADERS:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-10}
+      - LOCAL_SCAN_ROOT=/data/scan
       - CORS_ORIGINS=${CORS_ORIGINS:-false}
       - CORS_ALLOW_CREDENTIALS=${CORS_ALLOW_CREDENTIALS:-false}
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${POSTGRES_DB:-analyzer}
@@ -107,6 +108,7 @@ services:
       - VECTOR_STORE_HEADERS=${VECTOR_STORE_HEADERS:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-10}
+      - LOCAL_SCAN_ROOT=/data/scan
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${POSTGRES_DB:-analyzer}
       - REDIS_URL=redis://redis:6379/0
     volumes:
