@@ -132,17 +132,21 @@ def _chunk_text(
     return chunks
 
 
-def _extract_with_unstructured(path: Path, documento_id: str) -> tuple[str, list[DocumentChunk], int]:
+def _extract_with_unstructured(path: Path, documento_id: str) -> tuple[str, list[DocumentChunk], int, str | None]:
+    """
+    Returns (text, chunks, count, failure_reason).
+    failure_reason is None on success, or a short string explaining why extraction yielded nothing.
+    """
     try:
         from unstructured.partition.auto import partition  # type: ignore
     except ImportError:
-        return "", [], 0
+        return "", [], 0, "librería 'unstructured' no instalada"
 
     try:
         elements = partition(filename=str(path))
     except Exception as exc:  # noqa: BLE001
         logger.warning("unstructured partition failed for %s: %s", path, exc)
-        return "", [], 0
+        return "", [], 0, f"{type(exc).__name__}: {exc}"
 
     raw_parts: list[str] = []
     chunks: list[DocumentChunk] = []
@@ -171,7 +175,9 @@ def _extract_with_unstructured(path: Path, documento_id: str) -> tuple[str, list
             )
         )
 
-    return "\n\n".join(raw_parts), chunks, len(raw_parts)
+    if not chunks:
+        return "", [], 0, "sin elementos con texto"
+    return "\n\n".join(raw_parts), chunks, len(raw_parts), None
 
 
 def _is_binary_file(file_index: FileIndex) -> bool:
@@ -224,14 +230,18 @@ def extract_document_content(file_index: FileIndex) -> DocumentExtraction:
             element_count=0,
         )
 
-    unstructured_text, unstructured_chunks, count = _extract_with_unstructured(path, documento_id)
+    unstructured_text, unstructured_chunks, count, unstructured_failure = _extract_with_unstructured(path, documento_id)
     if unstructured_chunks:
         text = unstructured_text
         chunks = unstructured_chunks
         extraction_method = "unstructured"
         element_count = count
-    elif file_index.extension in _TEXT_EXTENSIONS or (
-        file_index.mime_type and file_index.mime_type.startswith("text/")
+    else:
+        if unstructured_failure:
+            extraction_method = f"none ({unstructured_failure})"
+    if not chunks and (
+        file_index.extension in _TEXT_EXTENSIONS
+        or (file_index.mime_type and file_index.mime_type.startswith("text/"))
     ):
         try:
             text = _read_text_file(path)

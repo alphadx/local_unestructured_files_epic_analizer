@@ -321,8 +321,13 @@ async def run_pipeline(job_id: str, request: ScanRequest, db: AsyncSession) -> N
             allowed_mime_types = request.allowed_mime_types or settings.allowed_mime_types
             denied_mime_types = request.denied_mime_types or settings.denied_mime_types
 
+            # If caller specified allowed_extensions without an explicit mode, whitelist is the
+            # only sensible interpretation — otherwise allowed_extensions is silently ignored.
+            if request.allowed_extensions and not request.ingestion_mode:
+                ingestion_mode = "whitelist"
+
             if request.ingestion_mode or request.allowed_extensions or request.denied_extensions or request.allowed_mime_types or request.denied_mime_types:
-                await _log(job_id, "INFO", f"[Sobrescrito] Usando configuración personalizada de filtrado", db)
+                await _log(job_id, "INFO", f"[Sobrescrito] Filtrado personalizado — modo={ingestion_mode}, ext_permitidas={allowed_extensions or '(todas)'}", db)
 
             result = await asyncio.wait_for(
                 loop.run_in_executor(
@@ -412,7 +417,6 @@ async def run_pipeline(job_id: str, request: ScanRequest, db: AsyncSession) -> N
             )
 
             if not extraction.text and not extraction.chunks:
-                reason = f"({extraction.extraction_method})" if extraction.extraction_method not in ("none", "skipped_binary") else ""
                 if extraction.extraction_method == "skipped_binary":
                     await _log(
                         job_id,
@@ -425,7 +429,7 @@ async def run_pipeline(job_id: str, request: ScanRequest, db: AsyncSession) -> N
                     await _log(
                         job_id,
                         "INFO",
-                        f"[Paso 2/5] Archivo sin texto extraído {reason}, omitiendo clasificación/embedding: {fi.path}",
+                        f"[Paso 2/5] Sin texto extraído ({extraction.extraction_method}): {fi.path}",
                         db,
                     )
                 continue
