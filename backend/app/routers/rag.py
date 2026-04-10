@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/rag", tags=["rag"])
 
 
 @router.post("/query", response_model=RagQueryResponse)
-async def rag_query(request: RagQueryRequest) -> RagQueryResponse:
+def rag_query(request: RagQueryRequest) -> RagQueryResponse:
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
     return query_rag(request)
