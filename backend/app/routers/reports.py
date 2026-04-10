@@ -16,7 +16,6 @@ from app.models.schemas import (
     GroupSimilarityResponse,
     JobStatistics,
     NamedEntityType,
-    NamedEntityType,
     ScanComparisonResponse,
 )
 from app.services.analytics_service import build_corpus_exploration, build_job_statistics
@@ -26,7 +25,6 @@ from app.services.executive_summary_service import (
     render_summary_pdf,
 )
 from app.services.export_service import documents_to_csv, documents_to_json_payload
-from app.services.ner_service import build_contacts_report
 from app.services.ner_service import build_contacts_report
 from app.services import job_manager
 
@@ -246,6 +244,7 @@ async def get_contacts(
         ge=1,
         description="Only include contacts that appear at least this many times.",
     ),
+    db: AsyncSession = Depends(get_db),
 ) -> ContactsReport:
     """
     Return aggregated named entities (contacts) extracted from all documents in a job.
@@ -259,11 +258,11 @@ async def get_contacts(
     Use `entity_type` to narrow results to a specific type and `min_frequency`
     to filter out rare mentions.
     """
-    job = job_manager.get_job(job_id)
+    job = await job_manager.get_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    documents = job_manager.get_documents(job_id)
+    documents = await job_manager.get_documents(db, job_id)
     report = build_contacts_report(job_id, documents)
 
     if entity_type is not None or min_frequency > 1:

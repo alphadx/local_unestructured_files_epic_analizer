@@ -10,6 +10,16 @@ from app.models.schemas import ArtifactKind, DocumentChunk, FileIndex
 logger = logging.getLogger(__name__)
 
 _TEXT_EXTENSIONS = {".txt", ".csv", ".md", ".json", ".xml", ".html", ".htm"}
+_SPREADSHEET_EXTENSIONS = {".xlsx", ".xlsm"}
+_PDF_EXTENSIONS = {".pdf"}
+_DOCX_EXTENSIONS = {".docx"}
+_CONTAINER_TEXTUAL_EXTENSIONS = {
+    ".pdf",
+    ".docx",
+    ".pptx",
+    ".xlsx",
+    ".xlsm",
+}
 _MAX_CHUNK_CHARS = 1_200
 _MAX_TEXT_CHARS = 20_000
 _MAX_CLASSIFICATION_CHARS = 12_000
@@ -180,6 +190,123 @@ def _extract_with_unstructured(path: Path, documento_id: str) -> tuple[str, list
     return "\n\n".join(raw_parts), chunks, len(raw_parts), None
 
 
+def _extract_with_openpyxl(path: Path, documento_id: str) -> tuple[str, list[DocumentChunk], int, str | None]:
+    try:
+        from openpyxl import load_workbook  # type: ignore
+    except ImportError:
+        return "", [], 0, "librería 'openpyxl' no instalada"
+
+    try:
+        workbook = load_workbook(filename=str(path), read_only=True, data_only=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("openpyxl failed for %s: %s", path, exc)
+        return "", [], 0, f"{type(exc).__name__}: {exc}"
+
+    raw_parts: list[str] = []
+
+    try:
+        for sheet in workbook.worksheets:
+            for row in sheet.iter_rows(values_only=True):
+                values = [str(value).strip() for value in row if value is not None and str(value).strip()]
+                if not values:
+                    continue
+                line = " | ".join(values)
+                raw_parts.append(f"[{sheet.title}] {line}")
+    finally:
+        try:
+            workbook.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    workbook_text = "\n".join(raw_parts)
+    chunks = _chunk_text(
+        documento_id=documento_id,
+        source_path=str(path),
+        text=workbook_text,
+        title=path.name,
+        section_path=["xlsx"],
+    )
+
+    if not chunks:
+        return "", [], 0, "sin celdas con texto"
+    return workbook_text, chunks, len(raw_parts), None
+
+
+def _extract_with_pypdf(path: Path, documento_id: str) -> tuple[str, list[DocumentChunk], int, str | None]:
+    try:
+        from pypdf import PdfReader  # type: ignore
+    except ImportError:
+        return "", [], 0, "librería 'pypdf' no instalada"
+
+    try:
+        reader = PdfReader(str(path))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("pypdf failed opening %s: %s", path, exc)
+        return "", [], 0, f"{type(exc).__name__}: {exc}"
+
+    raw_parts: list[str] = []
+    chunks: list[DocumentChunk] = []
+
+    for page_idx, page in enumerate(reader.pages):
+        try:
+            page_text = page.extract_text() or ""
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("pypdf failed extracting page %s (%s): %s", page_idx, path, exc)
+            continue
+        cleaned = _normalize_text(page_text)
+        if not cleaned:
+            continue
+        raw_parts.append(cleaned)
+        chunks.extend(
+            _chunk_text(
+                documento_id=documento_id,
+                source_path=str(path),
+                text=cleaned,
+                title=path.name,
+                section_path=["pdf"],
+                page_number=page_idx + 1,
+            )
+        )
+
+    if not chunks:
+        return "", [], 0, "sin páginas con texto"
+    return "\n\n".join(raw_parts), chunks, len(raw_parts), None
+
+
+def _extract_with_docx(path: Path, documento_id: str) -> tuple[str, list[DocumentChunk], int, str | None]:
+    try:
+        import docx  # type: ignore
+    except ImportError:
+        return "", [], 0, "librería 'python-docx' no instalada"
+
+    try:
+        doc = docx.Document(str(path))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("python-docx failed opening %s: %s", path, exc)
+        return "", [], 0, f"{type(exc).__name__}: {exc}"
+
+    raw_parts: list[str] = []
+    
+    for para in doc.paragraphs:
+        cleaned = _normalize_text(para.text)
+        if not cleaned:
+            continue
+        raw_parts.append(cleaned)
+        
+    docx_text = "\n\n".join(raw_parts)
+    chunks = _chunk_text(
+        documento_id=documento_id,
+        source_path=str(path),
+        text=docx_text,
+        title=path.name,
+        section_path=["docx"],
+    )
+
+    if not chunks:
+        return "", [], 0, "sin párrafos con texto"
+    return docx_text, chunks, len(raw_parts), None
+
+
 def _is_binary_file(file_index: FileIndex) -> bool:
     """Check if file is binary based on extension or MIME type."""
     # Check by extension first (fastest)
@@ -192,6 +319,12 @@ def _is_binary_file(file_index: FileIndex) -> bool:
         mime_lower = file_index.mime_type.lower()
         for binary_prefix in _BINARY_MIME_PREFIXES:
             if mime_lower.startswith(binary_prefix):
+                # Some office/pdf files are misdetected as octet-stream by magic.
+                if (
+                    binary_prefix == "application/octet-stream"
+                    and ext_lower in _CONTAINER_TEXTUAL_EXTENSIONS
+                ):
+                    continue
                 return True
     
     return False
@@ -239,6 +372,36 @@ def extract_document_content(file_index: FileIndex) -> DocumentExtraction:
     else:
         if unstructured_failure:
             extraction_method = f"none ({unstructured_failure})"
+    if not chunks and file_index.extension.lower() in _SPREADSHEET_EXTENSIONS:
+        xlsx_text, xlsx_chunks, xlsx_count, xlsx_failure = _extract_with_openpyxl(path, documento_id)
+        if xlsx_chunks:
+            text = xlsx_text
+            chunks = xlsx_chunks
+            extraction_method = "openpyxl"
+            element_count = xlsx_count
+        elif xlsx_failure:
+            extraction_method = f"none ({xlsx_failure})"
+
+    if not chunks and file_index.extension.lower() in _PDF_EXTENSIONS:
+        pdf_text, pdf_chunks, pdf_count, pdf_failure = _extract_with_pypdf(path, documento_id)
+        if pdf_chunks:
+            text = pdf_text
+            chunks = pdf_chunks
+            extraction_method = "pypdf"
+            element_count = pdf_count
+        elif pdf_failure:
+            extraction_method = f"none ({pdf_failure})"
+
+    if not chunks and file_index.extension.lower() in _DOCX_EXTENSIONS:
+        docx_text, docx_chunks, docx_count, docx_failure = _extract_with_docx(path, documento_id)
+        if docx_chunks:
+            text = docx_text
+            chunks = docx_chunks
+            extraction_method = "python-docx"
+            element_count = docx_count
+        elif docx_failure:
+            extraction_method = f"none ({docx_failure})"
+
     if not chunks and (
         file_index.extension in _TEXT_EXTENSIONS
         or (file_index.mime_type and file_index.mime_type.startswith("text/"))

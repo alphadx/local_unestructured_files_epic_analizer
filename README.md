@@ -140,6 +140,8 @@ External:  Google Gemini API (Flash + embeddings)
 - **[NUEVO ✨ FASE 2]** Migración completa de store in-memory a **PostgreSQL** con SQLAlchemy async ORM y migraciones Alembic. Procesamiento asíncrono con **Celery + Redis** (workers, Flower monitoring). 174 tests pasando. Ver [019_fase2_postgresql_celery.md](DOCS/avances/019_fase2_postgresql_celery.md).
 - **[NUEVO ✨]** Estabilización de workers Celery con SQLAlchemy async/asyncpg: loop persistente por proceso + cierre ordenado de engine en shutdown para evitar errores `Future attached to a different loop`. Ver [020_fix_celery_async_loop.md](DOCS/avances/020_fix_celery_async_loop.md).
 - **[NUEVO ✨]** En Docker, el escaneo local queda anclado a `/data/scan` mediante `LOCAL_SCAN_ROOT`, evitando resoluciones relativas hacia `/app`. Ver [021_local_scan_root_enforcement.md](DOCS/avances/021_local_scan_root_enforcement.md).
+- **[NUEVO ✨]** Fallback de extracción nativo para `.xlsx` (openpyxl) y `.pdf` (pypdf) cuando `unstructured` no está instalado; evita pipelines vacíos en whitelist y mejora robustez operativa.
+- **[NUEVO ✨]** Smoke tests de regresión para ingesta `.xlsx` y consulta RAG sin vectores, validando que no haya errores 500 y que la ruta crítica se mantenga estable.
 - Navegación por familias de clusters y selección de cluster individual en el dashboard.
 - Vista de análisis por grupos de directorio con perfiles, alertas, recomendaciones y similitud entre grupos.
 - API de reportes con estadísticas, exploración de corpus, exportación, comparación de scans y análisis de grupos.

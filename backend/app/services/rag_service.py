@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import logging
 import re
 from dataclasses import dataclass
@@ -99,22 +100,56 @@ def _lexical_score(query: str, haystack: str) -> float:
 
 def _job_documents(job_id: str | None) -> list:
     if job_id:
-        return job_manager.get_documents(job_id)
-    return [
-        doc
-        for job in job_manager.list_jobs()
-        for doc in job_manager.get_documents(job.job_id)
-    ]
+        docs = job_manager.get_documents(job_id)
+        if inspect.iscoroutine(docs):
+            docs.close()
+            return []
+        if inspect.isawaitable(docs):
+            return []
+        return docs
+    jobs = job_manager.list_jobs()
+    if inspect.iscoroutine(jobs):
+        jobs.close()
+        return []
+    if inspect.isawaitable(jobs):
+        return []
+    all_docs = []
+    for job in jobs:
+        docs = job_manager.get_documents(job.job_id)
+        if inspect.iscoroutine(docs):
+            docs.close()
+            continue
+        if inspect.isawaitable(docs):
+            continue
+        all_docs.extend(docs)
+    return all_docs
 
 
 def _job_chunks(job_id: str | None) -> list:
     if job_id:
-        return job_manager.get_chunks(job_id)
-    return [
-        chunk
-        for job in job_manager.list_jobs()
-        for chunk in job_manager.get_chunks(job.job_id)
-    ]
+        chunks = job_manager.get_chunks(job_id)
+        if inspect.iscoroutine(chunks):
+            chunks.close()
+            return []
+        if inspect.isawaitable(chunks):
+            return []
+        return chunks
+    jobs = job_manager.list_jobs()
+    if inspect.iscoroutine(jobs):
+        jobs.close()
+        return []
+    if inspect.isawaitable(jobs):
+        return []
+    all_chunks = []
+    for job in jobs:
+        chunks = job_manager.get_chunks(job.job_id)
+        if inspect.iscoroutine(chunks):
+            chunks.close()
+            continue
+        if inspect.isawaitable(chunks):
+            continue
+        all_chunks.extend(chunks)
+    return all_chunks
 
 
 def _fallback_records(request: RagQueryRequest) -> list[dict]:

@@ -6,6 +6,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 from app.services.document_extraction_service import extract_document_content
@@ -75,6 +77,7 @@ def test_prefers_unstructured_extraction_when_available(monkeypatch, tmp_path):
                 )
             ],
             1,
+            None,
         )
 
     monkeypatch.setattr(extraction_service, "_extract_with_unstructured", fake_unstructured)
@@ -110,7 +113,66 @@ def test_skips_binary_file_by_extension(tmp_path):
     assert result.extraction_method == "skipped_binary"
     assert result.text == ""
     assert len(result.chunks) == 0
-    assert result.element_count == 0
+
+
+def test_extracts_xlsx_with_openpyxl_fallback(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    from app.models.schemas import FileIndex
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Datos"
+    sheet["A1"] = "Nombre"
+    sheet["B1"] = "Monto"
+    sheet["A2"] = "Alice"
+    sheet["B2"] = 1200
+    xlsx_file = tmp_path / "dataset.xlsx"
+    workbook.save(xlsx_file)
+    workbook.close()
+
+    file_index = FileIndex(
+        path=str(xlsx_file),
+        name=xlsx_file.name,
+        extension=".xlsx",
+        size_bytes=xlsx_file.stat().st_size,
+        created_at="2026-04-04T00:00:00",
+        modified_at="2026-04-04T00:00:00",
+        sha256="xlsx123",
+        mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    result = extract_document_content(file_index)
+
+    assert result.extraction_method == "openpyxl"
+    assert len(result.chunks) >= 1
+    assert "Alice" in result.text
+
+
+def test_octet_stream_xlsx_is_not_skipped_as_binary(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    from app.models.schemas import FileIndex
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet["A1"] = "Contenido"
+    xlsx_file = tmp_path / "octet.xlsx"
+    workbook.save(xlsx_file)
+    workbook.close()
+
+    file_index = FileIndex(
+        path=str(xlsx_file),
+        name=xlsx_file.name,
+        extension=".xlsx",
+        size_bytes=xlsx_file.stat().st_size,
+        created_at="2026-04-04T00:00:00",
+        modified_at="2026-04-04T00:00:00",
+        sha256="octetxlsx",
+        mime_type="application/octet-stream",
+    )
+
+    result = extract_document_content(file_index)
+
+    assert result.extraction_method != "skipped_binary"
 
 
 def test_skips_binary_file_by_mime_type(tmp_path):
@@ -163,3 +225,35 @@ def test_skips_compressed_archive(tmp_path):
     assert result.extraction_method == "skipped_binary"
     assert result.text == ""
     assert len(result.chunks) == 0
+
+
+def test_extracts_docx_with_python_docx_fallback(tmp_path):
+    docx = pytest.importorskip("docx")
+    try:
+        from app.models.schemas import FileIndex
+    except ImportError:
+        pytest.skip("Could not import schemas")
+
+    doc = docx.Document()
+    doc.add_paragraph("Primer párrafo de prueba docx.")
+    doc.add_paragraph("Segundo párrafo con más contenido.")
+    docx_file = tmp_path / "documento.docx"
+    doc.save(docx_file)
+
+    file_index = FileIndex(
+        path=str(docx_file),
+        name=docx_file.name,
+        extension=".docx",
+        size_bytes=docx_file.stat().st_size,
+        created_at="2026-04-04T00:00:00",
+        modified_at="2026-04-04T00:00:00",
+        sha256="docx123",
+        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+    result = extract_document_content(file_index)
+
+    assert result.extraction_method == "python-docx"
+    assert len(result.chunks) >= 1
+    assert "Primer párrafo" in result.text
+

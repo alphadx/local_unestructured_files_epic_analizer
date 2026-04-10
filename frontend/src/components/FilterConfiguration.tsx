@@ -45,7 +45,7 @@ export default function FilterConfiguration({ onConfigChange }: FilterConfigurat
     loadConfig();
   }, []);
 
-  const handleConfigChange = () => {
+  useEffect(() => {
     const overrides: Parameters<NonNullable<typeof onConfigChange>>[0] = {};
 
     if (ingestionMode) overrides.ingestion_mode = ingestionMode;
@@ -55,7 +55,14 @@ export default function FilterConfiguration({ onConfigChange }: FilterConfigurat
     if (deniedMimeTypes) overrides.denied_mime_types = deniedMimeTypes;
 
     onConfigChange?.(overrides);
-  };
+  }, [
+    ingestionMode,
+    allowedExtensions,
+    deniedExtensions,
+    allowedMimeTypes,
+    deniedMimeTypes,
+    onConfigChange,
+  ]);
 
   const resetOverrides = () => {
     setIngestionMode("");
@@ -145,10 +152,7 @@ export default function FilterConfiguration({ onConfigChange }: FilterConfigurat
               <span>Modo de ingesta</span>
               <select
                 value={ingestionMode}
-                onChange={(e) => {
-                  setIngestionMode(e.target.value);
-                  handleConfigChange();
-                }}
+                onChange={(e) => setIngestionMode(e.target.value)}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">Sin cambios (usar sistema)</option>
@@ -162,10 +166,7 @@ export default function FilterConfiguration({ onConfigChange }: FilterConfigurat
               <input
                 type="text"
                 value={allowedExtensions}
-                onChange={(e) => {
-                  setAllowedExtensions(e.target.value);
-                  handleConfigChange();
-                }}
+                onChange={(e) => setAllowedExtensions(e.target.value)}
                 placeholder=".txt,.pdf,.docx,.json,.csv"
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
@@ -177,10 +178,7 @@ export default function FilterConfiguration({ onConfigChange }: FilterConfigurat
               <input
                 type="text"
                 value={deniedExtensions}
-                onChange={(e) => {
-                  setDeniedExtensions(e.target.value);
-                  handleConfigChange();
-                }}
+                onChange={(e) => setDeniedExtensions(e.target.value)}
                 placeholder=".exe,.dll,.so,.bin"
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
@@ -192,10 +190,7 @@ export default function FilterConfiguration({ onConfigChange }: FilterConfigurat
               <input
                 type="text"
                 value={allowedMimeTypes}
-                onChange={(e) => {
-                  setAllowedMimeTypes(e.target.value);
-                  handleConfigChange();
-                }}
+                onChange={(e) => setAllowedMimeTypes(e.target.value)}
                 placeholder="text/,application/pdf,application/json"
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
@@ -209,10 +204,7 @@ export default function FilterConfiguration({ onConfigChange }: FilterConfigurat
               <input
                 type="text"
                 value={deniedMimeTypes}
-                onChange={(e) => {
-                  setDeniedMimeTypes(e.target.value);
-                  handleConfigChange();
-                }}
+                onChange={(e) => setDeniedMimeTypes(e.target.value)}
                 placeholder="application/x-executable,application/x-sharedlib"
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
