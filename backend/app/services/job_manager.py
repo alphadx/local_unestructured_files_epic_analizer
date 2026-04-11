@@ -408,105 +408,102 @@ async def run_pipeline(job_id: str, request: ScanRequest, db: AsyncSession) -> N
             )
             await _log(job_id, "DEBUG", f"Clasificando [{idx + 1}/{len(unique_files)}]: {fi.path}", db)
 
-            extraction = await loop.run_in_executor(None, extract_document_content, fi)
-            await _log(
-                job_id,
-                "DEBUG",
-                f"  → extracción={extraction.extraction_method}, partes={len(extraction.chunks)}",
-                db,
-            )
-
-            if not extraction.text and not extraction.chunks:
-                if extraction.extraction_method == "skipped_binary":
-                    await _log(
-                        job_id,
-                        "DEBUG",
-                        f"[Paso 2/5] Archivo binario detectado, saltando: {fi.path}",
-                        db,
-                    )
-                else:
-                    non_binary_files += 1  # non-binary but no text — still counts as attempted
-                    await _log(
-                        job_id,
-                        "INFO",
-                        f"[Paso 2/5] Sin texto extraído ({extraction.extraction_method}): {fi.path}",
-                        db,
-                    )
-                continue
-
-            non_binary_files += 1
-
-            classification_context = build_classification_context(extraction)
-            if classification_context:
+            try:
+                extraction = await loop.run_in_executor(None, extract_document_content, fi)
                 await _log(
                     job_id,
                     "DEBUG",
-                    f"  → contexto LLM={len(classification_context)} caracteres",
+                    f"  → extracción={extraction.extraction_method}, partes={len(extraction.chunks)}",
                     db,
                 )
 
-            doc = await loop.run_in_executor(
-                None,
-                gemini_service.classify_document,
-                fi,
-                classification_context or extraction.text,
-            )
-            await _log(job_id, "DEBUG",
-                 f"  → categoría={doc.categoria}, pii={doc.pii_info.detected}", db)
-            chunks.extend(extraction.chunks)
+                if not extraction.text and not extraction.chunks:
+                    if extraction.extraction_method == "skipped_binary":
+                        await _log(
+                            job_id,
+                            "DEBUG",
+                            f"[Paso 2/5] Archivo binario detectado, saltando: {fi.path}",
+                            db,
+                        )
+                    else:
+                        non_binary_files += 1  # non-binary but no text — still counts as attempted
+                        await _log(
+                            job_id,
+                            "INFO",
+                            f"[Paso 2/5] Sin texto extraído ({extraction.extraction_method}): {fi.path}",
+                            db,
+                        )
+                    continue
 
-            # --- Step 3: Embeddings ---
-            if request.enable_embeddings:
-                from app.services import embeddings_service
-                from app.db import vector_store
+                non_binary_files += 1
 
-                embed_text = _build_embedding_text(doc, extraction.text)
-                if embed_text:
-                    await _log(
-                        job_id,
-                        "INFO",
-                        f"[Paso 3/5] Embedding documento {doc.documento_id} "
-                        f"path={fi.path} chars={len(embed_text)} model={settings.gemini_embedding_model}",
-                        db,
-                    )
-                    embedding = await loop.run_in_executor(
-                        None, embeddings_service.embed_text, embed_text
-                    )
-                    doc.embedding = embedding
-                    await loop.run_in_executor(
-                        None,
-                        partial(vector_store.upsert_document, doc, job_id=job_id),
-                    )
-
-                for chunk in extraction.chunks:
-                    chunk_text = _build_chunk_embedding_text(chunk.text)
-                    if not chunk_text:
-                        continue
+                classification_context = build_classification_context(extraction)
+                if classification_context:
                     await _log(
                         job_id,
                         "DEBUG",
-                        f"[Paso 3/5] Embedding chunk {chunk.chunk_index} "
-                        f"documento={doc.documento_id} path={chunk.source_path} "
-                        f"chars={len(chunk_text)}",
+                        f"  → contexto LLM={len(classification_context)} caracteres",
                         db,
                     )
-                    chunk.embedding = await loop.run_in_executor(
-                        None, embeddings_service.embed_text, chunk_text
-                    )
-                    await loop.run_in_executor(
-                        None,
-                        partial(
-                            vector_store.upsert_chunk,
-                            chunk,
-                            job_id=job_id,
-                            category=doc.categoria.value,
-                            cluster_sugerido=doc.analisis_semantico.cluster_sugerido or "",
-                            risk_level=doc.pii_info.risk_level.value,
-                            confidence=doc.analisis_semantico.confianza_clasificacion or 0.0,
-                        ),
-                    )
 
-            documents.append(doc)
+                doc = await loop.run_in_executor(
+                    None,
+                    gemini_service.classify_document,
+                    fi,
+                    classification_context or extraction.text,
+                )
+                await _log(job_id, "DEBUG",
+                     f"  → categoría={doc.categoria}, pii={doc.pii_info.detected}", db)
+                chunks.extend(extraction.chunks)
+
+                # --- Step 3: Embeddings ---
+                if request.enable_embeddings:
+                    from app.services import embeddings_service
+                    from app.db import vector_store
+
+                    embed_text = _build_embedding_text(doc, extraction.text)
+                    if embed_text:
+                        await _log(
+                            job_id,
+                            "INFO",
+                            f"[Paso 3/5] Embedding documento {doc.documento_id} "
+                            f"path={fi.path} chars={len(embed_text)} model={settings.gemini_embedding_model}",
+                            db,
+                        )
+                        embedding = await loop.run_in_executor(
+                            None, embeddings_service.embed_text, embed_text
+                        )
+                        doc.embedding = embedding
+                        await loop.run_in_executor(
+                            None,
+                            partial(vector_store.upsert_document, doc, job_id=job_id),
+                        )
+
+                    for chunk in extraction.chunks:
+                        chunk_text = _build_chunk_embedding_text(chunk.text)
+                        if not chunk_text:
+                            continue
+                        chunk.embedding = await loop.run_in_executor(
+                            None, embeddings_service.embed_text, chunk_text
+                        )
+                        await loop.run_in_executor(
+                            None,
+                            partial(
+                                vector_store.upsert_chunk,
+                                chunk,
+                                job_id=job_id,
+                                category=doc.categoria.value,
+                                cluster_sugerido=doc.analisis_semantico.cluster_sugerido or "",
+                                risk_level=doc.pii_info.risk_level.value,
+                                confidence=doc.analisis_semantico.confianza_clasificacion or 0.0,
+                            ),
+                        )
+
+                documents.append(doc)
+            except Exception as file_exc:
+                non_binary_files += 1 # Contar como intentado para mantener consistencia de progreso
+                await _log(job_id, "ERROR", f"Fallo al procesar documento {fi.path}: {file_exc!r}", db)
+                continue
 
         # Bulk insert documents and chunks into DB
         for doc in documents:

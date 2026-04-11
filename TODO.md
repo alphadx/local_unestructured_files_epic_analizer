@@ -263,3 +263,12 @@
 - Análisis de redes de relaciones (personas, organizaciones)
 
 **Beneficio**: Plataforma de unstructured data analysis clase mundial (post-2026 Q3)
+
+### 🔄 Resiliencia y Reanudación de Jobs
+Implementar la capacidad de continuar un escaneo interrumpido o fallido utilizando el `job_id`.
+
+- [ ] **Lógica de Delta en Backend**: Desarrollar función en `job_manager.py` que compare los archivos físicos en el `path` contra los registros exitosos en la tabla `documents` de PostgreSQL.
+- [ ] **Endpoint de Reanudación**: Crear `POST /api/jobs/{job_id}/resume` para re-encolar en Celery únicamente los archivos pendientes o fallidos.
+- [ ] **Gestión de Estados**: Añadir estados intermedios en el modelo de `Job` (ej: `PARTIAL`, `RESUMING`) para mejorar la trazabilidad en el dashboard.
+- [ ] **Optimización de Costos**: Garantizar que el proceso de reanudación no genere nuevas llamadas a la API de Embeddings ni a Gemini para archivos que ya tienen metadatos persistidos.
+- [ ] **UI Feedback**: Integrar botón de "Reanudar" en el componente `JobStatusCard` cuando un job detecte errores recuperables.

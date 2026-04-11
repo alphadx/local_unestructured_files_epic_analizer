@@ -13,6 +13,8 @@ import logging
 import re
 from pathlib import Path
 
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from google.api_core import exceptions
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
@@ -220,6 +222,16 @@ def _get_client():
     return genai.Client(api_key=settings.gemini_api_key)
 
 
+@retry(
+    retry=retry_if_exception_type((exceptions.ServiceUnavailable, exceptions.ResourceExhausted, exceptions.InternalServerError)),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    reraise=True
+)
+def _generate_content_with_retry(client, model, contents):
+    return client.models.generate_content(model=model, contents=contents)
+
+
 def _stub_metadata(file_index: FileIndex) -> DocumentMetadata:
     """Return a minimal metadata object when Gemini is not available."""
     return DocumentMetadata(
@@ -328,9 +340,10 @@ def _classify_with_text(file_index: FileIndex, text_content: str) -> DocumentMet
         + "\n\nTexto extraído del documento:\n"
         + text_content[:12_000]
     )
-    response = client.models.generate_content(
-        model=settings.gemini_flash_model,
-        contents=prompt,
+    response = _generate_content_with_retry(
+        client,
+        settings.gemini_flash_model,
+        prompt,
     )
     return _parse_response(response.text, file_index)
 
@@ -392,23 +405,22 @@ def classify_document(file_index: FileIndex, extracted_text: str | None = None) 
             else:
                 uploaded = client.files.upload(file=str(path))
                 parts = [_CLASSIFICATION_PROMPT, uploaded]
-            response = client.models.generate_content(
-                model=settings.gemini_flash_model,
-                contents=parts,
-            )
+            response = _generate_content_with_retry(client, settings.gemini_flash_model, parts)
 
         elif path.suffix.lower() in _TEXT_EXTENSIONS:
             with open(path, "r", encoding="utf-8", errors="replace") as fh:
                 text_for_ner = fh.read(20_000)
-            response = client.models.generate_content(
-                model=settings.gemini_flash_model,
-                contents=_CLASSIFICATION_PROMPT + "\n\nContenido del documento:\n" + text_for_ner,
+            response = _generate_content_with_retry(
+                client,
+                settings.gemini_flash_model,
+                _CLASSIFICATION_PROMPT + "\n\nContenido del documento:\n" + text_for_ner,
             )
 
         else:
-            response = client.models.generate_content(
-                model=settings.gemini_flash_model,
-                contents=(
+            response = _generate_content_with_retry(
+                client,
+                settings.gemini_flash_model,
+                (
                     _CLASSIFICATION_PROMPT
                     + f"\n\nNombre del archivo: {file_index.name}"
                     + f"\nExtensión: {file_index.extension}"
@@ -433,9 +445,10 @@ def generate_rag_answer(question: str, context: str) -> str | None:
 
     try:
         client = _get_client()
-        response = client.models.generate_content(
-            model=settings.gemini_flash_model,
-            contents=f"{_RAG_PROMPT}\n\nPregunta:\n{question}\n\nContexto:\n{context}",
+        response = _generate_content_with_retry(
+            client,
+            settings.gemini_flash_model,
+            f"{_RAG_PROMPT}\n\nPregunta:\n{question}\n\nContexto:\n{context}",
         )
         text = (response.text or "").strip()
         return text or None
